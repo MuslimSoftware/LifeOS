@@ -6,7 +6,6 @@ struct BottomNavigationView: View {
     @Environment(EditorViewModel.self) private var editorViewModel
     @Environment(\.colorScheme) private var colorScheme
     
-    let aiService: AIIntegrationService
     let availableFonts: [String]
     
     var body: some View {
@@ -22,14 +21,6 @@ struct BottomNavigationView: View {
             
             HStack(spacing: 8) {
                 TimerButtonView(isHoveringBottomNav: $vm.isHoveringBottomNav)
-                
-                Text("•")
-                    .foregroundColor(.gray)
-                
-                ChatMenuView(
-                    isHoveringBottomNav: $vm.isHoveringBottomNav,
-                    aiService: aiService
-                )
                 
                 Text("•")
                     .foregroundColor(.gray)

@@ -6,7 +6,6 @@ struct ContentView: View {
     
     @State private var fileService = FileManagerService()
     @State private var pdfService = PDFExportService()
-    @State private var aiService = AIIntegrationService()
     @State private var editorViewModel: EditorViewModel?
     @State private var entryListViewModel: EntryListViewModel?
     
@@ -59,7 +58,6 @@ struct ContentView: View {
                     VStack {
                         Spacer()
                         BottomNavigationView(
-                            aiService: aiService,
                             availableFonts: NSFontManager.shared.availableFontFamilies
                         )
                     }
