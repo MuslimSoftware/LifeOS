@@ -4,7 +4,7 @@ import SwiftUI
 struct EntryListView: View {
     @Environment(EntryListViewModel.self) private var viewModel
     @Environment(EditorViewModel.self) private var editorViewModel
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
     
     @State private var isHoveringHistory = false
     
@@ -23,14 +23,14 @@ struct EntryListView: View {
                         HStack(spacing: 4) {
                             Text("History")
                                 .font(.system(size: 13))
-                                .foregroundColor(isHoveringHistory ? (colorScheme == .light ? .black : .white) : (colorScheme == .light ? .gray : .gray.opacity(0.8)))
+                                .foregroundColor(isHoveringHistory ? theme.buttonTextHover : theme.buttonText)
                             Image(systemName: "arrow.up.right")
                                 .font(.system(size: 10))
-                                .foregroundColor(isHoveringHistory ? (colorScheme == .light ? .black : .white) : (colorScheme == .light ? .gray : .gray.opacity(0.8)))
+                                .foregroundColor(isHoveringHistory ? theme.buttonTextHover : theme.buttonText)
                         }
                         Text(fileService.documentsDirectory.path)
                             .font(.system(size: 10))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(theme.secondaryText)
                             .lineLimit(1)
                     }
                     Spacer()
@@ -103,6 +103,6 @@ struct EntryListView: View {
             .scrollIndicators(.never)
         }
         .frame(width: 200)
-        .background(Color(colorScheme == .light ? .white : NSColor.black))
+        .background(theme.backgroundColor)
     }
 }

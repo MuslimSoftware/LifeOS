@@ -4,7 +4,7 @@ import AppKit
 
 struct FontSelectorView: View {
     @Environment(AppSettings.self) private var settings
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
     
     @State private var hoveredFont: String? = nil
     @State private var isHoveringSize = false
@@ -32,7 +32,7 @@ struct FontSelectorView: View {
             }
             
             Text("•")
-                .foregroundColor(.gray)
+                .foregroundColor(theme.separatorColor)
             
             Button("Lato") {
                 settings.cycleFont(to: "Lato-Regular")
@@ -50,7 +50,7 @@ struct FontSelectorView: View {
             }
             
             Text("•")
-                .foregroundColor(.gray)
+                .foregroundColor(theme.separatorColor)
             
             Button("Arial") {
                 settings.cycleFont(to: "Arial")
@@ -68,7 +68,7 @@ struct FontSelectorView: View {
             }
             
             Text("•")
-                .foregroundColor(.gray)
+                .foregroundColor(theme.separatorColor)
             
             Button("System") {
                 settings.cycleFont(to: ".AppleSystemUIFont")
@@ -86,7 +86,7 @@ struct FontSelectorView: View {
             }
             
             Text("•")
-                .foregroundColor(.gray)
+                .foregroundColor(theme.separatorColor)
             
             Button("Serif") {
                 settings.cycleFont(to: "Times New Roman")
@@ -104,7 +104,7 @@ struct FontSelectorView: View {
             }
             
             Text("•")
-                .foregroundColor(.gray)
+                .foregroundColor(theme.separatorColor)
             
             Button(randomButtonTitle) {
                 settings.setRandomFont(from: availableFonts)
@@ -137,10 +137,10 @@ struct FontSelectorView: View {
     }
     
     private var textColor: Color {
-        return colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
+        return theme.buttonText
     }
     
     private var textHoverColor: Color {
-        return colorScheme == .light ? Color.black : Color.white
+        return theme.buttonTextHover
     }
 }

@@ -8,6 +8,10 @@ class AppSettings {
     var fontSize: CGFloat = 18
     var currentRandomFont: String = ""
     
+    var currentTheme: Theme {
+        colorScheme == .light ? .light : .dark
+    }
+    
     init() {
         let savedScheme = UserDefaults.standard.string(forKey: "colorScheme") ?? "light"
         colorScheme = savedScheme == "dark" ? .dark : .light

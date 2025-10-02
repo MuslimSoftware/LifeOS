@@ -11,7 +11,7 @@ struct EntryRowView: View {
     let onDelete: () -> Void
     let onExport: () -> Void
     
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
     
     var body: some View {
         Button(action: onSelect) {
@@ -21,7 +21,7 @@ struct EntryRowView: View {
                         Text(entry.previewText)
                             .font(.system(size: 13))
                             .lineLimit(1)
-                            .foregroundColor(.primary)
+                            .foregroundColor(theme.primaryText)
                         
                         Spacer()
                         
@@ -31,8 +31,8 @@ struct EntryRowView: View {
                                     Image(systemName: "arrow.down.circle")
                                         .font(.system(size: 11))
                                         .foregroundColor(hoveredExportId == entry.id ?
-                                            (colorScheme == .light ? .black : .white) :
-                                            (colorScheme == .light ? .gray : .gray.opacity(0.8)))
+                                            theme.buttonTextHover :
+                                            theme.buttonText)
                                 }
                                 .buttonStyle(.plain)
                                 .help("Export entry as PDF")
@@ -47,7 +47,7 @@ struct EntryRowView: View {
                                 Button(action: onDelete) {
                                     Image(systemName: "trash")
                                         .font(.system(size: 11))
-                                        .foregroundColor(hoveredTrashId == entry.id ? .red : .gray)
+                                        .foregroundColor(hoveredTrashId == entry.id ? theme.destructive : theme.secondaryText)
                                 }
                                 .buttonStyle(.plain)
                                 .onHover { hovering in
@@ -63,7 +63,7 @@ struct EntryRowView: View {
                     
                     Text(entry.date)
                         .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(theme.secondaryText)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -81,9 +81,9 @@ struct EntryRowView: View {
     
     private var backgroundColor: Color {
         if isSelected {
-            return Color.gray.opacity(0.1)
+            return theme.selectedBackground
         } else if isHovered {
-            return Color.gray.opacity(0.05)
+            return theme.hoveredBackground
         } else {
             return Color.clear
         }

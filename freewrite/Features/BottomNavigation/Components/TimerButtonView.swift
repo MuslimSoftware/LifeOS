@@ -3,7 +3,7 @@ import SwiftUI
 
 struct TimerButtonView: View {
     @Environment(EditorViewModel.self) private var viewModel
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
     
     @State private var isHoveringTimer = false
     @Binding var isHoveringBottomNav: Bool
@@ -37,9 +37,9 @@ struct TimerButtonView: View {
     
     private var timerColor: Color {
         if viewModel.timerIsRunning {
-            return isHoveringTimer ? (colorScheme == .light ? .black : .white) : .gray.opacity(0.8)
+            return isHoveringTimer ? theme.buttonTextHover : theme.tertiaryText
         } else {
-            return isHoveringTimer ? (colorScheme == .light ? .black : .white) : (colorScheme == .light ? .gray : .gray.opacity(0.8))
+            return isHoveringTimer ? theme.buttonTextHover : theme.buttonText
         }
     }
 }

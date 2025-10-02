@@ -6,7 +6,7 @@ struct UtilityButtonsView: View {
     @Environment(EditorViewModel.self) private var editorViewModel
     @Environment(EntryListViewModel.self) private var entryListViewModel
     @Environment(AppSettings.self) private var settings
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
     
     @State private var isHoveringFullscreen = false
     @State private var isHoveringNewEntry = false
@@ -36,7 +36,7 @@ struct UtilityButtonsView: View {
             }
             
             Text("•")
-                .foregroundColor(.gray)
+                .foregroundColor(theme.separatorColor)
             
             Button(action: {
                 let newText = entryListViewModel.createNewEntry()
@@ -59,7 +59,7 @@ struct UtilityButtonsView: View {
             }
             
             Text("•")
-                .foregroundColor(.gray)
+                .foregroundColor(theme.separatorColor)
             
             Button(action: {
                 settings.toggleTheme()
@@ -79,7 +79,7 @@ struct UtilityButtonsView: View {
             }
 
             Text("•")
-                .foregroundColor(.gray)
+                .foregroundColor(theme.separatorColor)
             
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -103,10 +103,10 @@ struct UtilityButtonsView: View {
     }
     
     private var textColor: Color {
-        return colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
+        return theme.buttonText
     }
     
     private var textHoverColor: Color {
-        return colorScheme == .light ? Color.black : Color.white
+        return theme.buttonTextHover
     }
 }

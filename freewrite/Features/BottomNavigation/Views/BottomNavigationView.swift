@@ -4,7 +4,7 @@ import AppKit
 
 struct BottomNavigationView: View {
     @Environment(EditorViewModel.self) private var editorViewModel
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.theme) private var theme
     
     let availableFonts: [String]
     
@@ -23,7 +23,7 @@ struct BottomNavigationView: View {
                 TimerButtonView(isHoveringBottomNav: $vm.isHoveringBottomNav)
                 
                 Text("•")
-                    .foregroundColor(.gray)
+                    .foregroundColor(theme.separatorColor)
                 
                 UtilityButtonsView(isHoveringBottomNav: $vm.isHoveringBottomNav)
             }
@@ -34,7 +34,7 @@ struct BottomNavigationView: View {
             }
         }
         .padding()
-        .background(Color(colorScheme == .light ? .white : .black))
+        .background(theme.backgroundColor)
         .opacity(vm.bottomNavOpacity)
         .onHover { hovering in
             vm.isHoveringBottomNav = hovering

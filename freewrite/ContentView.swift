@@ -17,6 +17,7 @@ struct ContentView: View {
                 mainContent
                     .environment(editorVM)
                     .environment(entryListVM)
+                    .theme(settings.currentTheme)
                     .onReceive(timer) { _ in
                         editorVM.timerTick()
                     }
@@ -48,7 +49,7 @@ struct ContentView: View {
         if let editorVM = editorViewModel, let entryListVM = entryListViewModel {
             HStack(spacing: 0) {
                 ZStack {
-                    Color(settings.colorScheme == .light ? .white : .black)
+                    settings.currentTheme.backgroundColor
                         .ignoresSafeArea()
                     
                     EditorView()
