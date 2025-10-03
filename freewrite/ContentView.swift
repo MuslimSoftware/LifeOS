@@ -8,31 +8,38 @@ struct ContentView: View {
     @State private var pdfService = PDFExportService()
     @State private var editorViewModel: EditorViewModel?
     @State private var entryListViewModel: EntryListViewModel?
+    @State private var selectedRoute: NavigationRoute = .home
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     var body: some View {
         Group {
             if let editorVM = editorViewModel, let entryListVM = entryListViewModel {
-                mainContent
-                    .environment(editorVM)
-                    .environment(entryListVM)
-                    .theme(settings.currentTheme)
-                    .onReceive(timer) { _ in
-                        editorVM.timerTick()
-                    }
-                    .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { _ in
-                        editorVM.isFullscreen = true
-                    }
-                    .onReceive(NotificationCenter.default.publisher(for: NSWindow.willExitFullScreenNotification)) { _ in
-                        editorVM.isFullscreen = false
-                    }
-                    .onChange(of: editorVM.text) {
-                        if let currentId = entryListVM.selectedEntryId,
-                           let currentEntry = entryListVM.entries.first(where: { $0.id == currentId }) {
-                            entryListVM.saveEntry(entry: currentEntry, content: editorVM.text)
+                HStack(spacing: 0) {
+                    SidebarView(selectedRoute: $selectedRoute)
+                    
+                    Divider()
+                    
+                    mainContent
+                        .environment(editorVM)
+                        .environment(entryListVM)
+                        .theme(settings.currentTheme)
+                        .onReceive(timer) { _ in
+                            editorVM.timerTick()
                         }
-                    }
+                        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { _ in
+                            editorVM.isFullscreen = true
+                        }
+                        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willExitFullScreenNotification)) { _ in
+                            editorVM.isFullscreen = false
+                        }
+                        .onChange(of: editorVM.text) {
+                            if let currentId = entryListVM.selectedEntryId,
+                               let currentEntry = entryListVM.entries.first(where: { $0.id == currentId }) {
+                                entryListVM.saveEntry(entry: currentEntry, content: editorVM.text)
+                            }
+                        }
+                }
             } else {
                 ProgressView()
                     .onAppear {
@@ -46,34 +53,16 @@ struct ContentView: View {
     
     @ViewBuilder
     private var mainContent: some View {
-        if let editorVM = editorViewModel, let entryListVM = entryListViewModel {
-            HStack(spacing: 0) {
-                ZStack {
-                    settings.currentTheme.backgroundColor
-                        .ignoresSafeArea()
-                    
-                    EditorView()
-                        .padding(.bottom, editorVM.bottomNavOpacity > 0 ? 68 : 0)
-                        .ignoresSafeArea()
-                    
-                    VStack {
-                        Spacer()
-                        BottomNavigationView(
-                            availableFonts: NSFontManager.shared.availableFontFamilies
-                        )
-                    }
-                }
-                
-                if entryListVM.showingSidebar {
-                    Divider()
-                    
-                    EntryListView(
-                        fileService: fileService,
-                        pdfService: pdfService
-                    )
-                }
-            }
-            .animation(.easeInOut(duration: 0.2), value: entryListVM.showingSidebar)
+        switch selectedRoute {
+        case .home:
+            HomeView()
+        case .journal:
+            JournalPageView(
+                pdfService: pdfService,
+                fileService: fileService
+            )
+        case .calendar:
+            CalendarView(selectedRoute: $selectedRoute)
         }
     }
     

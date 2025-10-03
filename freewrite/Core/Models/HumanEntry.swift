@@ -6,6 +6,7 @@ struct HumanEntry: Identifiable {
     let date: String
     let filename: String
     var previewText: String
+    let year: Int
     
     static func createNew() -> HumanEntry {
         let id = UUID()
@@ -17,11 +18,15 @@ struct HumanEntry: Identifiable {
         dateFormatter.dateFormat = "MMM d"
         let displayDate = dateFormatter.string(from: now)
         
+        let calendar = Calendar.current
+        let year = calendar.component(.year, from: now)
+        
         return HumanEntry(
             id: id,
             date: displayDate,
             filename: "[\(id)]-[\(dateString)].md",
-            previewText: ""
+            previewText: "",
+            year: year
         )
     }
 }

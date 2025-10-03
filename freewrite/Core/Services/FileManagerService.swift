@@ -94,12 +94,16 @@ class FileManagerService {
                     dateFormatter.dateFormat = "MMM d"
                     let displayDate = dateFormatter.string(from: fileDate)
                     
+                    let calendar = Calendar.current
+                    let year = calendar.component(.year, from: fileDate)
+                    
                     return (
                         entry: HumanEntry(
                             id: uuid,
                             date: displayDate,
                             filename: filename,
-                            previewText: truncated
+                            previewText: truncated,
+                            year: year
                         ),
                         date: fileDate
                     )
