@@ -10,7 +10,6 @@ struct UtilityButtonsView: View {
     
     @State private var isHoveringFullscreen = false
     @State private var isHoveringNewEntry = false
-    @State private var isHoveringThemeToggle = false
     @State private var isHoveringClock = false
     @Binding var isHoveringBottomNav: Bool
     
@@ -58,26 +57,6 @@ struct UtilityButtonsView: View {
                 }
             }
             
-            Text("•")
-                .foregroundColor(theme.separatorColor)
-            
-            Button(action: {
-                settings.toggleTheme()
-            }) {
-                Image(systemName: settings.colorScheme == .light ? "moon.fill" : "sun.max.fill")
-                    .foregroundColor(isHoveringThemeToggle ? textHoverColor : textColor)
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                isHoveringThemeToggle = hovering
-                isHoveringBottomNav = hovering
-                if hovering {
-                    NSCursor.pointingHand.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
-
             Text("•")
                 .foregroundColor(theme.separatorColor)
             

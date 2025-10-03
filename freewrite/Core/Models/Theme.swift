@@ -42,21 +42,21 @@ struct Theme {
     )
     
     static let dark = Theme(
-        backgroundColor: .black,
-        surfaceColor: .black,
-        primaryText: Color(red: 0.9, green: 0.9, blue: 0.9),
-        secondaryText: Color.gray.opacity(0.8),
-        tertiaryText: Color.gray.opacity(0.6),
-        placeholderText: Color.gray.opacity(0.6),
-        buttonText: Color.gray.opacity(0.8),
-        buttonTextHover: .white,
-        accentColor: .blue,
-        dividerColor: Color.gray.opacity(0.3),
-        popoverBackground: Color(NSColor.darkGray),
+        backgroundColor: Color(red: 0.12, green: 0.12, blue: 0.12),
+        surfaceColor: Color(red: 0.12, green: 0.12, blue: 0.12),
+        primaryText: Color(red: 0.95, green: 0.95, blue: 0.95),
+        secondaryText: Color(red: 0.65, green: 0.65, blue: 0.65),
+        tertiaryText: Color(red: 0.5, green: 0.5, blue: 0.5),
+        placeholderText: Color(red: 0.5, green: 0.5, blue: 0.5),
+        buttonText: Color(red: 0.65, green: 0.65, blue: 0.65),
+        buttonTextHover: Color(red: 0.95, green: 0.95, blue: 0.95),
+        accentColor: Color(red: 0.4, green: 0.6, blue: 1.0),
+        dividerColor: Color(red: 0.3, green: 0.3, blue: 0.3),
+        popoverBackground: Color(red: 0.15, green: 0.15, blue: 0.15),
         destructive: .red,
-        selectedBackground: Color.gray.opacity(0.1),
-        hoveredBackground: Color.gray.opacity(0.05),
-        separatorColor: Color.gray.opacity(0.8)
+        selectedBackground: Color(red: 0.2, green: 0.2, blue: 0.2),
+        hoveredBackground: Color(red: 0.17, green: 0.17, blue: 0.17),
+        separatorColor: Color(red: 0.5, green: 0.5, blue: 0.5)
     )
 }
 

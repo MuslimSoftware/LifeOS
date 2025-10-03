@@ -17,6 +17,7 @@ struct ContentView: View {
             if let editorVM = editorViewModel, let entryListVM = entryListViewModel {
                 HStack(spacing: 0) {
                     SidebarView(selectedRoute: $selectedRoute)
+                        .theme(settings.currentTheme)
                     
                     Divider()
                     

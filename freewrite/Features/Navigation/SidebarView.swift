@@ -8,9 +8,11 @@ enum NavigationRoute: String, CaseIterable {
 
 struct SidebarView: View {
     @Environment(\.theme) private var theme
+    @Environment(AppSettings.self) private var settings
     @Binding var selectedRoute: NavigationRoute
     
     @State private var hoveredRoute: NavigationRoute? = nil
+    @State private var isHoveringThemeToggle = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -42,6 +44,28 @@ struct SidebarView: View {
             }
             
             Spacer()
+            
+            HStack {
+                Spacer()
+                Button(action: {
+                    settings.toggleTheme()
+                }) {
+                    Image(systemName: settings.colorScheme == .light ? "moon.fill" : "sun.max.fill")
+                        .foregroundColor(isHoveringThemeToggle ? theme.buttonTextHover : theme.buttonText)
+                        .font(.system(size: 14))
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    isHoveringThemeToggle = hovering
+                    if hovering {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+                .padding(.trailing, 4)
+            }
+            .padding(.bottom, 16)
         }
         .padding(.horizontal, 12)
         .frame(width: 160)

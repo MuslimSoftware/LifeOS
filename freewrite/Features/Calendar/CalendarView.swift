@@ -10,7 +10,7 @@ struct CalendarView: View {
     @State private var currentMonth = Date()
     @State private var hoveredControl: String? = nil
     @State private var scrollAccumulator: CGFloat = 0
-    @State private var selectedDay: Date? = nil
+    @State private var selectedDay: Date? = Date()
     
     private let calendar = Calendar.current
     private let daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -264,7 +264,10 @@ struct CalendarView: View {
     }
     
     private func openEntry(_ entry: HumanEntry) {
-        entryListViewModel.loadEntry(entry: entry)
+        entryListViewModel.selectedEntryId = entry.id
+        if let content = entryListViewModel.loadEntry(entry: entry) {
+            editorViewModel.text = content
+        }
         selectedRoute = .journal
     }
 }
