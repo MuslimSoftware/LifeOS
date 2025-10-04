@@ -25,8 +25,11 @@ class FileManagerService {
         
         print("Attempting to save file to: \(fileURL.path)")
         
+        let metadata = "---\ndate: \(entry.date)\nyear: \(entry.year)\n---\n"
+        let contentWithMetadata = metadata + content
+        
         do {
-            try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            try contentWithMetadata.write(to: fileURL, atomically: true, encoding: .utf8)
             print("Successfully saved entry: \(entry.filename)")
         } catch {
             print("Error saving entry: \(error)")
@@ -43,7 +46,7 @@ class FileManagerService {
             if fileManager.fileExists(atPath: fileURL.path) {
                 let content = try String(contentsOf: fileURL, encoding: .utf8)
                 print("Successfully loaded entry: \(entry.filename)")
-                return content
+                return stripMetadata(from: content)
             } else {
                 print("File does not exist: \(entry.filename)")
                 return nil
@@ -53,6 +56,49 @@ class FileManagerService {
             print("Error details: \(error.localizedDescription)")
             return nil
         }
+    }
+    
+    private func stripMetadata(from content: String) -> String {
+        if content.hasPrefix("---\n") {
+            let components = content.components(separatedBy: "---\n")
+            if components.count >= 3 {
+                return components.dropFirst(2).joined(separator: "---\n")
+            }
+        }
+        return content
+    }
+    
+    private func parseMetadata(from content: String) -> (date: String, year: Int)? {
+        guard content.hasPrefix("---\n") else { return nil }
+        
+        let components = content.components(separatedBy: "---\n")
+        guard components.count >= 2 else { return nil }
+        
+        let metadataBlock = components[1]
+        let lines = metadataBlock.components(separatedBy: "\n")
+        
+        var date: String?
+        var year: Int?
+        
+        for line in lines {
+            let parts = line.components(separatedBy: ": ")
+            guard parts.count == 2 else { continue }
+            
+            let key = parts[0].trimmingCharacters(in: .whitespaces)
+            let value = parts[1].trimmingCharacters(in: .whitespaces)
+            
+            if key == "date" {
+                date = value
+            } else if key == "year" {
+                year = Int(value)
+            }
+        }
+        
+        if let date = date, let year = year {
+            return (date, year)
+        }
+        
+        return nil
     }
     
     func loadExistingEntries() -> [HumanEntry] {
@@ -86,16 +132,28 @@ class FileManagerService {
                 
                 do {
                     let content = try String(contentsOf: fileURL, encoding: .utf8)
-                    let preview = content
+                    
+                    // Try to load date from metadata first
+                    var displayDate: String
+                    var year: Int
+                    
+                    if let metadata = parseMetadata(from: content) {
+                        displayDate = metadata.date
+                        year = metadata.year
+                    } else {
+                        // Fallback to filename parsing for old entries
+                        dateFormatter.dateFormat = "MMM d"
+                        displayDate = dateFormatter.string(from: fileDate)
+                        
+                        let calendar = Calendar.current
+                        year = calendar.component(.year, from: fileDate)
+                    }
+                    
+                    let strippedContent = stripMetadata(from: content)
+                    let preview = strippedContent
                         .replacingOccurrences(of: "\n", with: " ")
                         .trimmingCharacters(in: .whitespacesAndNewlines)
                     let truncated = preview.isEmpty ? "" : (preview.count > 30 ? String(preview.prefix(30)) + "..." : preview)
-                    
-                    dateFormatter.dateFormat = "MMM d"
-                    let displayDate = dateFormatter.string(from: fileDate)
-                    
-                    let calendar = Calendar.current
-                    let year = calendar.component(.year, from: fileDate)
                     
                     return (
                         entry: HumanEntry(
@@ -134,7 +192,8 @@ class FileManagerService {
         
         do {
             let content = try String(contentsOf: fileURL, encoding: .utf8)
-            let preview = content
+            let strippedContent = stripMetadata(from: content)
+            let preview = strippedContent
                 .replacingOccurrences(of: "\n", with: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             return preview.isEmpty ? "" : (preview.count > 30 ? String(preview.prefix(30)) + "..." : preview)

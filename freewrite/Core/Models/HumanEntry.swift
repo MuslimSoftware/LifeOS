@@ -3,10 +3,10 @@ import Foundation
 
 struct HumanEntry: Identifiable {
     let id: UUID
-    let date: String
+    var date: String
     let filename: String
     var previewText: String
-    let year: Int
+    var year: Int
     
     static func createNew() -> HumanEntry {
         let id = UUID()
