@@ -12,11 +12,12 @@ struct EntryGroup: Identifiable {
 }
 
 struct MonthGroup: Identifiable {
-    let month: Int  // 1-12
+    let year: Int
+    let month: Int
     let monthName: String
     let entries: [HumanEntry]
     
-    var id: Int { month }
+    var id: String { "\(year)-\(month)" }
     
     var count: Int { entries.count }
 }

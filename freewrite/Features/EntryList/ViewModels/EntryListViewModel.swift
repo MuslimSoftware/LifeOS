@@ -262,6 +262,7 @@ class EntryListViewModel {
                 }
                 
                 return MonthGroup(
+                    year: year,
                     month: month,
                     monthName: monthName,
                     entries: sortedEntries
