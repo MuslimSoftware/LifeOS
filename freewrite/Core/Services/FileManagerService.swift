@@ -171,8 +171,36 @@ class FileManagerService {
                 }
             }
             
+            // Sort by journal entry date (most recent first), not file creation date
             return entriesWithDates
-                .sorted { $0.date > $1.date }
+                .sorted { entry1, entry2 in
+                    // Parse the display date + year to create sortable dates
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "MMM d"
+                    dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                    
+                    guard let date1 = dateFormatter.date(from: entry1.entry.date),
+                          let date2 = dateFormatter.date(from: entry2.entry.date) else {
+                        // Fallback to file date if parsing fails
+                        return entry1.date > entry2.date
+                    }
+                    
+                    var components1 = Calendar.current.dateComponents([.month, .day], from: date1)
+                    components1.year = entry1.entry.year
+                    components1.hour = 12
+                    
+                    var components2 = Calendar.current.dateComponents([.month, .day], from: date2)
+                    components2.year = entry2.entry.year
+                    components2.hour = 12
+                    
+                    guard let fullDate1 = Calendar.current.date(from: components1),
+                          let fullDate2 = Calendar.current.date(from: components2) else {
+                        return entry1.date > entry2.date
+                    }
+                    
+                    // Sort most recent first
+                    return fullDate1 > fullDate2
+                }
                 .map { $0.entry }
             
         } catch {

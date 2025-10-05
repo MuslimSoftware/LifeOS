@@ -24,6 +24,7 @@ struct JournalPageView: View {
                     Spacer()
                     BottomNavigationView(
                         availableFonts: NSFontManager.shared.availableFontFamilies,
+                        fileService: fileService,
                         selectedDate: $selectedDate
                     )
                 }

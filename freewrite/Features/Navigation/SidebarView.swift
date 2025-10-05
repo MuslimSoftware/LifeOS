@@ -13,6 +13,8 @@ struct SidebarView: View {
     
     @State private var hoveredRoute: NavigationRoute? = nil
     @State private var isHoveringThemeToggle = false
+    @State private var isHoveringSettings = false
+    @State private var showSettings = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -33,6 +35,7 @@ struct SidebarView: View {
                         .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
                 .onHover { hovering in
                     hoveredRoute = hovering ? route : nil
                     if hovering {
@@ -45,8 +48,27 @@ struct SidebarView: View {
             
             Spacer()
             
-            HStack {
+            HStack(spacing: 12) {
+                Button(action: {
+                    showSettings = true
+                }) {
+                    Image(systemName: "gearshape")
+                        .foregroundColor(isHoveringSettings ? theme.buttonTextHover : theme.buttonText)
+                        .font(.system(size: 14))
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .onHover { hovering in
+                    isHoveringSettings = hovering
+                    if hovering {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+                
                 Spacer()
+                
                 Button(action: {
                     settings.toggleTheme()
                 }) {
@@ -55,6 +77,7 @@ struct SidebarView: View {
                         .font(.system(size: 14))
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
                 .onHover { hovering in
                     isHoveringThemeToggle = hovering
                     if hovering {
@@ -66,10 +89,14 @@ struct SidebarView: View {
                 .padding(.trailing, 4)
             }
             .padding(.bottom, 16)
+            .padding(.leading, 4)
         }
         .padding(.horizontal, 12)
         .frame(width: 160)
         .background(theme.surfaceColor)
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+        }
     }
     
     private func backgroundColorFor(_ route: NavigationRoute) -> Color {

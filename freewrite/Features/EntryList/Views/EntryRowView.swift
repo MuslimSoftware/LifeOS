@@ -61,7 +61,7 @@ struct EntryRowView: View {
                         }
                     }
                     
-                    Text("\(entry.date), \(String(entry.year))")
+                    Text(verbatim: "\(entry.date), \(entry.year)")
                         .font(.system(size: 12))
                         .foregroundColor(theme.secondaryText)
                 }

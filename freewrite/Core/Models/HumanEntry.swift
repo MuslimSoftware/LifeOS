@@ -29,4 +29,25 @@ struct HumanEntry: Identifiable {
             year: year
         )
     }
+    
+    static func createWithDate(date: Date) -> HumanEntry {
+        let id = UUID()
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
+        let timestampString = dateFormatter.string(from: Date())
+        
+        dateFormatter.dateFormat = "MMM d"
+        let displayDate = dateFormatter.string(from: date)
+        
+        let calendar = Calendar.current
+        let year = calendar.component(.year, from: date)
+        
+        return HumanEntry(
+            id: id,
+            date: displayDate,
+            filename: "[\(id)]-[\(timestampString)].md",
+            previewText: "",
+            year: year
+        )
+    }
 }

@@ -7,6 +7,7 @@ struct BottomNavigationView: View {
     @Environment(\.theme) private var theme
     
     let availableFonts: [String]
+    let fileService: FileManagerService
     @Binding var selectedDate: Date
     
     @State private var hoveredDateControl: String? = nil
@@ -60,7 +61,7 @@ struct BottomNavigationView: View {
                 Text("•")
                     .foregroundColor(theme.separatorColor)
                 
-                Text(yearString)
+                Text(verbatim: yearString)
                     .font(.system(size: 13))
                     .foregroundColor(hoveredDateControl == "year" ? theme.buttonTextHover : theme.buttonText)
                     .padding(.horizontal, 8)
@@ -82,7 +83,7 @@ struct BottomNavigationView: View {
                 Text("•")
                     .foregroundColor(theme.separatorColor)
                 
-                UtilityButtonsView(isHoveringBottomNav: $vm.isHoveringBottomNav)
+                UtilityButtonsView(isHoveringBottomNav: $vm.isHoveringBottomNav, fileService: fileService)
             }
             .padding(8)
             .cornerRadius(6)

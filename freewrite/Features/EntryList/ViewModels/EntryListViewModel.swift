@@ -5,11 +5,25 @@ import SwiftUI
 @Observable
 class EntryListViewModel {
     var entries: [HumanEntry] = []
+    var groupedEntries: [EntryGroup] = []
     var selectedEntryId: UUID? = nil
     var hoveredEntryId: UUID? = nil
     var hoveredTrashId: UUID? = nil
     var hoveredExportId: UUID? = nil
     var showingSidebar = false
+    
+    var expandedYears: Set<Int> = []
+    var expandedMonths: Set<String> = []
+    
+    var draftEntry: HumanEntry? = nil
+    
+    var isCurrentEntryDraft: Bool {
+        guard let draft = draftEntry,
+              let selectedId = selectedEntryId else {
+            return false
+        }
+        return draft.id == selectedId
+    }
     
     private let fileService: FileManagerService
     
@@ -19,7 +33,13 @@ class EntryListViewModel {
     
     func loadExistingEntries() -> String? {
         entries = fileService.loadExistingEntries()
-        print("Successfully loaded and sorted \(entries.count) entries")
+        groupedEntries = groupEntriesByDate(entries)
+        print("Successfully loaded and grouped \(entries.count) entries")
+        
+        let currentYear = Calendar.current.component(.year, from: Date())
+        let currentMonth = Calendar.current.component(.month, from: Date())
+        expandedYears.insert(currentYear)
+        expandedMonths.insert("\(currentYear)-\(currentMonth)")
         
         let calendar = Calendar.current
         let today = Date()
@@ -39,8 +59,8 @@ class EntryListViewModel {
             print("First time user, creating welcome entry")
             return createNewEntry(withWelcomeMessage: true)
         } else if !hasEmptyEntryToday && !hasOnlyWelcomeEntry {
-            print("No empty entry for today, creating new entry")
-            return createNewEntry(withWelcomeMessage: false)
+            print("Creating draft entry (not saved until user types)")
+            return createDraftEntry()
         } else {
             if let todayEntry = entries.first(where: { entry in
                 if let entryDate = parseDateFromDisplayString(entry.date) {
@@ -78,7 +98,19 @@ class EntryListViewModel {
             fileService.saveEntry(newEntry, content: text)
         }
         
+        groupedEntries = groupEntriesByDate(entries)
+        
         return text
+    }
+    
+    func createDraftEntry() -> String {
+        let newEntry = HumanEntry.createNew()
+        
+        draftEntry = newEntry
+        selectedEntryId = newEntry.id
+        
+        print("Draft entry created: \(newEntry.id)")
+        return ""
     }
     
     func loadEntry(entry: HumanEntry) -> String? {
@@ -86,16 +118,60 @@ class EntryListViewModel {
     }
     
     func saveEntry(entry: HumanEntry, content: String) {
+        if let draft = draftEntry, draft.id == entry.id {
+            if !content.isEmpty {
+                promoteDraftToSaved(entry: entry, content: content)
+            }
+        } else {
+            fileService.saveEntry(entry, content: content)
+            
+            if content.count < 20 {
+                updatePreviewTextFromContent(for: entry, content: content)
+            } else {
+                updatePreviewText(for: entry)
+            }
+        }
+    }
+    
+    private func promoteDraftToSaved(entry: HumanEntry, content: String) {
+        guard let draft = draftEntry, draft.id == entry.id else {
+            return
+        }
+        
+        print("Promoting draft to saved entry")
+        
         fileService.saveEntry(entry, content: content)
-        updatePreviewText(for: entry)
+        entries.insert(entry, at: 0)
+        groupedEntries = groupEntriesByDate(entries)
+        
+        let currentYear = Calendar.current.component(.year, from: Date())
+        let currentMonth = Calendar.current.component(.month, from: Date())
+        expandedYears.insert(currentYear)
+        expandedMonths.insert("\(currentYear)-\(currentMonth)")
+        
+        updatePreviewTextFromContent(for: entry, content: content)
+        draftEntry = nil
     }
     
     func deleteEntry(entry: HumanEntry) -> String? {
+        if let draft = draftEntry, draft.id == entry.id {
+            print("Deleting unsaved draft entry")
+            draftEntry = nil
+            
+            if let firstEntry = entries.first {
+                selectedEntryId = firstEntry.id
+                return loadEntry(entry: firstEntry)
+            } else {
+                return createDraftEntry()
+            }
+        }
+        
         do {
             try fileService.deleteEntry(entry)
             
             if let index = entries.firstIndex(where: { $0.id == entry.id }) {
                 entries.remove(at: index)
+                groupedEntries = groupEntriesByDate(entries)
                 
                 if selectedEntryId == entry.id {
                     if let firstEntry = entries.first {
@@ -115,6 +191,17 @@ class EntryListViewModel {
     func updatePreviewText(for entry: HumanEntry) {
         if let index = entries.firstIndex(where: { $0.id == entry.id }) {
             entries[index].previewText = fileService.getPreviewText(for: entry)
+            groupedEntries = groupEntriesByDate(entries)
+        }
+    }
+    
+    private func updatePreviewTextFromContent(for entry: HumanEntry, content: String) {
+        if let index = entries.firstIndex(where: { $0.id == entry.id }) {
+            let preview = content
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            entries[index].previewText = preview.isEmpty ? "" : (preview.count > 30 ? String(preview.prefix(30)) + "..." : preview)
+            groupedEntries = groupEntriesByDate(entries)
         }
     }
     
@@ -127,5 +214,86 @@ class EntryListViewModel {
             return Calendar.current.date(from: components)
         }
         return nil
+    }
+    
+    private func groupEntriesByDate(_ entries: [HumanEntry]) -> [EntryGroup] {
+        let calendar = Calendar.current
+        
+        let yearGroups = Dictionary(grouping: entries) { entry -> Int in
+            return entry.year
+        }
+        
+        let groups = yearGroups.map { (year, yearEntries) -> EntryGroup in
+            let monthGroups = Dictionary(grouping: yearEntries) { entry -> Int in
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "MMM d"
+                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                
+                guard let date = dateFormatter.date(from: entry.date) else {
+                    return 1
+                }
+                return calendar.component(.month, from: date)
+            }
+            
+            let months = monthGroups.map { (month, monthEntries) -> MonthGroup in
+                let monthName = DateFormatter().monthSymbols[month - 1]
+                
+                let sortedEntries = monthEntries.sorted { entry1, entry2 in
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "MMM d"
+                    dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                    
+                    guard let date1 = dateFormatter.date(from: entry1.date),
+                          let date2 = dateFormatter.date(from: entry2.date) else {
+                        return false
+                    }
+                    
+                    var components1 = calendar.dateComponents([.month, .day], from: date1)
+                    components1.year = entry1.year
+                    var components2 = calendar.dateComponents([.month, .day], from: date2)
+                    components2.year = entry2.year
+                    
+                    guard let fullDate1 = calendar.date(from: components1),
+                          let fullDate2 = calendar.date(from: components2) else {
+                        return false
+                    }
+                    
+                    return fullDate1 > fullDate2
+                }
+                
+                return MonthGroup(
+                    month: month,
+                    monthName: monthName,
+                    entries: sortedEntries
+                )
+            }.sorted { $0.month > $1.month }
+            
+            return EntryGroup(year: year, months: months)
+        }.sorted { $0.year > $1.year }
+        
+        return groups
+    }
+    
+    func toggleYear(_ year: Int) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if expandedYears.contains(year) {
+                expandedYears.remove(year)
+                let monthKeys = expandedMonths.filter { $0.hasPrefix("\(year)-") }
+                monthKeys.forEach { expandedMonths.remove($0) }
+            } else {
+                expandedYears.insert(year)
+            }
+        }
+    }
+    
+    func toggleMonth(_ year: Int, _ month: Int) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            let key = "\(year)-\(month)"
+            if expandedMonths.contains(key) {
+                expandedMonths.remove(key)
+            } else {
+                expandedMonths.insert(key)
+            }
+        }
     }
 }

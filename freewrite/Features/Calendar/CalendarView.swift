@@ -119,7 +119,7 @@ struct CalendarView: View {
                 Text("•")
                     .foregroundColor(theme.separatorColor)
                 
-                Text(yearString)
+                Text(verbatim: yearString)
                     .font(.system(size: 13))
                     .foregroundColor(hoveredControl == "year" ? theme.buttonTextHover : theme.buttonText)
                     .onHover { hovering in

@@ -35,9 +35,11 @@ struct ContentView: View {
                             editorVM.isFullscreen = false
                         }
                         .onChange(of: editorVM.text) {
-                            if let currentId = entryListVM.selectedEntryId,
-                               let currentEntry = entryListVM.entries.first(where: { $0.id == currentId }) {
-                                entryListVM.saveEntry(entry: currentEntry, content: editorVM.text)
+                            if let currentId = entryListVM.selectedEntryId {
+                                let currentEntry = entryListVM.entries.first(where: { $0.id == currentId }) ?? entryListVM.draftEntry
+                                if let currentEntry = currentEntry {
+                                    entryListVM.saveEntry(entry: currentEntry, content: editorVM.text)
+                                }
                             }
                         }
                 }
