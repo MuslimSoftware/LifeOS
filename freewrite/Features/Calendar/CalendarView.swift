@@ -59,43 +59,51 @@ struct CalendarView: View {
             .padding(.horizontal, 40)
             
             if let selectedDay = selectedDay, !entriesForSelectedDay(selectedDay).isEmpty {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(entriesForSelectedDay(selectedDay)) { entry in
-                            VStack(alignment: .leading, spacing: 4) {
-                                if !entry.previewText.isEmpty {
-                                    Text(entry.previewText)
-                                        .font(.system(size: 12))
-                                        .foregroundColor(theme.secondaryText)
-                                        .lineLimit(2)
-                                } else {
-                                    Text("Empty entry")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(theme.tertiaryText)
-                                        .italic()
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Journal")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(theme.primaryText)
+                        .padding(.horizontal, 40)
+                        .padding(.top, 24)
+                        .padding(.bottom, 16)
+                    
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(entriesForSelectedDay(selectedDay)) { entry in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    if !entry.previewText.isEmpty {
+                                        Text(entry.previewText)
+                                            .font(.system(size: 14))
+                                            .foregroundColor(theme.primaryText)
+                                            .lineLimit(1)
+                                    } else {
+                                        Text("Empty entry")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(theme.tertiaryText)
+                                            .italic()
+                                    }
                                 }
-                            }
-                            .padding(12)
-                            .background(theme.dividerColor.opacity(0.15))
-                            .cornerRadius(6)
-                            .onTapGesture {
-                                openEntry(entry)
-                            }
-                            .onHover { hovering in
-                                if hovering {
-                                    NSCursor.pointingHand.push()
-                                } else {
-                                    NSCursor.pop()
+                                .padding(16)
+                                .background(theme.dividerColor.opacity(0.15))
+                                .cornerRadius(8)
+                                .onTapGesture {
+                                    openEntry(entry)
                                 }
+                                .onHover { hovering in
+                                    if hovering {
+                                        NSCursor.pointingHand.push()
+                                    } else {
+                                        NSCursor.pop()
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .frame(maxWidth: .infinity * 0.5, alignment: .leading)
                         }
+                        .padding(.horizontal, 40)
+                        .padding(.bottom, 20)
                     }
-                    .padding(.horizontal, 40)
-                    .padding(.top, 20)
+                    .frame(height: 180)
                 }
-                .frame(height: 150)
             }
             
             Spacer()
@@ -264,6 +272,7 @@ struct CalendarView: View {
     }
     
     private func openEntry(_ entry: HumanEntry) {
+        entryListViewModel.expandSectionsForEntry(entry)
         entryListViewModel.selectedEntryId = entry.id
         if let content = entryListViewModel.loadEntry(entry: entry) {
             editorViewModel.text = content

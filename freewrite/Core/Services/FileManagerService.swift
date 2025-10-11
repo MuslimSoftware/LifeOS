@@ -153,7 +153,7 @@ class FileManagerService {
                     let preview = strippedContent
                         .replacingOccurrences(of: "\n", with: " ")
                         .trimmingCharacters(in: .whitespacesAndNewlines)
-                    let truncated = preview.isEmpty ? "" : (preview.count > 30 ? String(preview.prefix(30)) + "..." : preview)
+                    let truncated = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
                     
                     return (
                         entry: HumanEntry(
@@ -224,7 +224,7 @@ class FileManagerService {
             let preview = strippedContent
                 .replacingOccurrences(of: "\n", with: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            return preview.isEmpty ? "" : (preview.count > 30 ? String(preview.prefix(30)) + "..." : preview)
+            return preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
         } catch {
             print("Error updating preview text: \(error)")
             return ""

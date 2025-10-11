@@ -15,13 +15,21 @@ struct EntryRowView: View {
     
     var body: some View {
         Button(action: onSelect) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(entry.previewText)
-                            .font(.system(size: 13))
-                            .lineLimit(1)
-                            .foregroundColor(theme.primaryText)
+            HStack(alignment: .top, spacing: 0) {
+                if isSelected {
+                    Rectangle()
+                        .fill(theme.accentColor)
+                        .frame(width: 3)
+                        .cornerRadius(1.5)
+                }
+                
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(entry.previewText)
+                                .font(.system(size: 13))
+                                .lineLimit(1)
+                                .foregroundColor(theme.primaryText)
                         
                         Spacer()
                         
@@ -61,14 +69,15 @@ struct EntryRowView: View {
                         }
                     }
                     
-                    Text(verbatim: "\(entry.date), \(entry.year)")
-                        .font(.system(size: 12))
-                        .foregroundColor(theme.secondaryText)
+                        Text(verbatim: "\(entry.date), \(entry.year)")
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.secondaryText)
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, isSelected ? 13 : 16)
+                .padding(.vertical, 8)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 4)
                     .fill(backgroundColor)

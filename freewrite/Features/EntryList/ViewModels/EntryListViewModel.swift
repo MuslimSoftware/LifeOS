@@ -200,7 +200,7 @@ class EntryListViewModel {
             let preview = content
                 .replacingOccurrences(of: "\n", with: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            entries[index].previewText = preview.isEmpty ? "" : (preview.count > 30 ? String(preview.prefix(30)) + "..." : preview)
+            entries[index].previewText = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
             groupedEntries = groupEntriesByDate(entries)
         }
     }
@@ -295,6 +295,20 @@ class EntryListViewModel {
             } else {
                 expandedMonths.insert(key)
             }
+        }
+    }
+    
+    func expandSectionsForEntry(_ entry: HumanEntry) {
+        expandedYears.insert(entry.year)
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MMM d"
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        
+        if let date = dateFormatter.date(from: entry.date) {
+            let month = Calendar.current.component(.month, from: date)
+            let monthKey = "\(entry.year)-\(month)"
+            expandedMonths.insert(monthKey)
         }
     }
 }
