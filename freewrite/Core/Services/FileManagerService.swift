@@ -25,8 +25,26 @@ class FileManagerService {
         
         print("Attempting to save file to: \(fileURL.path)")
         
+        let existingContent = try? String(contentsOf: fileURL, encoding: .utf8)
+        let todoSection = existingContent != nil ? extractTODOSection(from: existingContent!) : ""
+        
         let metadata = "---\ndate: \(entry.date)\nyear: \(entry.year)\n---\n"
-        let contentWithMetadata = metadata + content
+        
+        let contentWithMetadata: String
+        if !todoSection.isEmpty {
+            contentWithMetadata = """
+            \(metadata)\(todoSection)
+            ## Journal
+            \(content)
+            """
+        } else {
+            contentWithMetadata = """
+            \(metadata)## TODOs
+            
+            ## Journal
+            \(content)
+            """
+        }
         
         do {
             try contentWithMetadata.write(to: fileURL, atomically: true, encoding: .utf8)
@@ -46,7 +64,7 @@ class FileManagerService {
             if fileManager.fileExists(atPath: fileURL.path) {
                 let content = try String(contentsOf: fileURL, encoding: .utf8)
                 print("Successfully loaded entry: \(entry.filename)")
-                return stripMetadata(from: content)
+                return extractJournalSection(from: content)
             } else {
                 print("File does not exist: \(entry.filename)")
                 return nil
@@ -149,8 +167,8 @@ class FileManagerService {
                         year = calendar.component(.year, from: fileDate)
                     }
                     
-                    let strippedContent = stripMetadata(from: content)
-                    let preview = strippedContent
+                    let journalContent = extractJournalSection(from: content)
+                    let preview = journalContent
                         .replacingOccurrences(of: "\n", with: " ")
                         .trimmingCharacters(in: .whitespacesAndNewlines)
                     let truncated = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
@@ -220,8 +238,8 @@ class FileManagerService {
         
         do {
             let content = try String(contentsOf: fileURL, encoding: .utf8)
-            let strippedContent = stripMetadata(from: content)
-            let preview = strippedContent
+            let journalContent = extractJournalSection(from: content)
+            let preview = journalContent
                 .replacingOccurrences(of: "\n", with: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             return preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
@@ -234,5 +252,143 @@ class FileManagerService {
     func entryContainsWelcomeMessage(_ entry: HumanEntry) -> Bool {
         guard let content = loadEntry(entry) else { return false }
         return content.contains("Welcome to Freewrite.")
+    }
+    
+    private func extractTODOSection(from content: String) -> String {
+        let withoutMetadata = stripMetadata(from: content)
+        
+        guard let todoRange = withoutMetadata.range(of: "## TODOs\n") else {
+            return ""
+        }
+        
+        let startIndex = todoRange.lowerBound
+        let endIndex: String.Index
+        
+        if let journalRange = withoutMetadata.range(of: "## Journal") {
+            endIndex = journalRange.lowerBound
+        } else {
+            endIndex = withoutMetadata.endIndex
+        }
+        
+        return String(withoutMetadata[startIndex..<endIndex])
+    }
+    
+    private func extractJournalSection(from content: String) -> String {
+        let withoutMetadata = stripMetadata(from: content)
+        
+        guard let journalRange = withoutMetadata.range(of: "## Journal\n") else {
+            return withoutMetadata.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        let journalContent = String(withoutMetadata[journalRange.upperBound...])
+        return journalContent.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    func loadTODOs(for entry: HumanEntry) -> [TODOItem] {
+        let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
+        
+        guard fileManager.fileExists(atPath: fileURL.path),
+              let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
+            return []
+        }
+        
+        let todoSection = extractTODOSection(from: content)
+        return parseTODOs(from: todoSection)
+    }
+    
+    private func parseTODOs(from todoSection: String) -> [TODOItem] {
+        var todos: [TODOItem] = []
+        let lines = todoSection.components(separatedBy: "\n")
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if trimmed.hasPrefix("- [") {
+                let completed = trimmed.contains("- [x]")
+
+                var text = trimmed
+                    .replacingOccurrences(of: "- [x] ", with: "")
+                    .replacingOccurrences(of: "- [ ] ", with: "")
+                    .trimmingCharacters(in: .whitespaces)
+
+                var dueTime: Date?
+
+                // Parse time in format @H:MM AM/PM or @HH:MM AM/PM
+                let timePattern = #"@(\d{1,2}):(\d{2})\s*(AM|PM)"#
+                if let regex = try? NSRegularExpression(pattern: timePattern, options: .caseInsensitive),
+                   let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) {
+
+                    let nsString = text as NSString
+                    let hourStr = nsString.substring(with: match.range(at: 1))
+                    let minuteStr = nsString.substring(with: match.range(at: 2))
+                    let periodStr = nsString.substring(with: match.range(at: 3)).uppercased()
+
+                    if var hour = Int(hourStr), let minute = Int(minuteStr) {
+                        // Convert to 24-hour format
+                        if periodStr == "PM" && hour != 12 {
+                            hour += 12
+                        } else if periodStr == "AM" && hour == 12 {
+                            hour = 0
+                        }
+
+                        var components = DateComponents()
+                        components.hour = hour
+                        components.minute = minute
+                        dueTime = Calendar.current.date(from: components)
+                    }
+
+                    // Remove time from text
+                    text = nsString.replacingCharacters(in: match.range, with: "").trimmingCharacters(in: .whitespaces)
+                }
+
+                if !text.isEmpty {
+                    todos.append(TODOItem(text: text, completed: completed, dueTime: dueTime))
+                }
+            }
+        }
+
+        return todos
+    }
+    
+    func saveTODOs(_ todos: [TODOItem], for entry: HumanEntry) {
+        let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
+
+        let existingContent = try? String(contentsOf: fileURL, encoding: .utf8)
+        let journalSection = existingContent != nil ? extractJournalSection(from: existingContent!) : ""
+
+        let todoLines = todos.map { todo in
+            let checkbox = todo.completed ? "[x]" : "[ ]"
+            var line = "- \(checkbox) \(todo.text)"
+
+            if let dueTime = todo.dueTime {
+                let calendar = Calendar.current
+                let hour = calendar.component(.hour, from: dueTime)
+                let minute = calendar.component(.minute, from: dueTime)
+
+                // Convert to 12-hour format
+                let period = hour >= 12 ? "PM" : "AM"
+                let displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour)
+
+                line += " @\(displayHour):\(String(format: "%02d", minute)) \(period)"
+            }
+
+            return line
+        }.joined(separator: "\n")
+        
+        let metadata = "---\ndate: \(entry.date)\nyear: \(entry.year)\n---\n"
+        let newContent = """
+        \(metadata)## TODOs
+        \(todoLines)
+        
+        ## Journal
+        \(journalSection)
+        """
+        
+        do {
+            try newContent.write(to: fileURL, atomically: true, encoding: .utf8)
+            print("Successfully saved TODOs for: \(entry.filename)")
+        } catch {
+            print("Error saving TODOs: \(error)")
+        }
     }
 }

@@ -24,8 +24,8 @@ class EntryListViewModel {
         }
         return draft.id == selectedId
     }
-    
-    private let fileService: FileManagerService
+
+    let fileService: FileManagerService
     
     init(fileService: FileManagerService) {
         self.fileService = fileService

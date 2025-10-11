@@ -4,14 +4,16 @@ struct CalendarView: View {
     @Environment(\.theme) private var theme
     @Environment(EntryListViewModel.self) private var entryListViewModel
     @Environment(EditorViewModel.self) private var editorViewModel
-    
+
     @Binding var selectedRoute: NavigationRoute
-    
+
     @State private var currentMonth = Date()
     @State private var hoveredControl: String? = nil
     @State private var scrollAccumulator: CGFloat = 0
     @State private var selectedDay: Date? = Date()
-    
+    @State private var todoViewModel: TODOViewModel?
+    @State private var todoCounts: [String: (incomplete: Int, completed: Int)] = [:]
+
     private let calendar = Calendar.current
     private let daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     
@@ -34,14 +36,17 @@ struct CalendarView: View {
                 }
                 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
-                    ForEach(daysInMonth, id: \.self) { day in
+                    ForEach(Array(daysInMonth.enumerated()), id: \.offset) { index, day in
                         if let day = day {
+                            let todoCounts = todosForDay(day)
                             DayCell(
                                 day: day,
                                 hasEntry: hasEntry(for: day),
                                 isToday: isToday(day),
                                 isSelected: isSelected(day),
-                                theme: theme
+                                theme: theme,
+                                incompleteTodoCount: todoCounts.incomplete,
+                                completedTodoCount: todoCounts.completed
                             )
                             .frame(height: 80)
                             .frame(maxWidth: .infinity)
@@ -58,51 +63,58 @@ struct CalendarView: View {
             }
             .padding(.horizontal, 40)
             
-            if let selectedDay = selectedDay, !entriesForSelectedDay(selectedDay).isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Journal")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(theme.primaryText)
-                        .padding(.horizontal, 40)
-                        .padding(.top, 24)
-                        .padding(.bottom, 16)
-                    
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 12) {
-                            ForEach(entriesForSelectedDay(selectedDay)) { entry in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    if !entry.previewText.isEmpty {
-                                        Text(entry.previewText)
-                                            .font(.system(size: 14))
-                                            .foregroundColor(theme.primaryText)
-                                            .lineLimit(1)
-                                    } else {
-                                        Text("Empty entry")
-                                            .font(.system(size: 14))
-                                            .foregroundColor(theme.tertiaryText)
-                                            .italic()
+            if let selectedDay = selectedDay, !entriesForSelectedDay(selectedDay).isEmpty, let todoVM = todoViewModel {
+                HStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Journal")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(theme.primaryText)
+                            .padding(.horizontal, 40)
+                            .padding(.top, 24)
+                            .padding(.bottom, 16)
+
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 12) {
+                                ForEach(entriesForSelectedDay(selectedDay)) { entry in
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        if !entry.previewText.isEmpty {
+                                            Text(entry.previewText)
+                                                .font(.system(size: 14))
+                                                .foregroundColor(theme.primaryText)
+                                                .lineLimit(1)
+                                        } else {
+                                            Text("Empty entry")
+                                                .font(.system(size: 14))
+                                                .foregroundColor(theme.tertiaryText)
+                                                .italic()
+                                        }
                                     }
-                                }
-                                .padding(16)
-                                .background(theme.dividerColor.opacity(0.15))
-                                .cornerRadius(8)
-                                .onTapGesture {
-                                    openEntry(entry)
-                                }
-                                .onHover { hovering in
-                                    if hovering {
-                                        NSCursor.pointingHand.push()
-                                    } else {
-                                        NSCursor.pop()
+                                    .padding(16)
+                                    .background(theme.dividerColor.opacity(0.15))
+                                    .cornerRadius(8)
+                                    .onTapGesture {
+                                        openEntry(entry)
                                     }
+                                    .onHover { hovering in
+                                        if hovering {
+                                            NSCursor.pointingHand.push()
+                                        } else {
+                                            NSCursor.pop()
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
+                            .padding(.horizontal, 40)
+                            .padding(.bottom, 20)
                         }
-                        .padding(.horizontal, 40)
-                        .padding(.bottom, 20)
+                        .frame(height: 180)
                     }
-                    .frame(height: 180)
+                    .frame(maxWidth: .infinity)
+
+                    TODOListView()
+                        .environment(todoVM)
+                        .frame(maxWidth: .infinity)
                 }
             }
             
@@ -161,10 +173,16 @@ struct CalendarView: View {
             }
             .padding()
             .onAppear {
+                if todoViewModel == nil {
+                    todoViewModel = TODOViewModel(fileService: entryListViewModel.fileService)
+                    updateTODOsForSelectedDay()
+                }
+                refreshTODOCounts()
+
                 NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
                     if hoveredControl == "month" || hoveredControl == "year" {
                         scrollAccumulator += event.deltaY
-                        
+
                         if scrollAccumulator > 3 {
                             if hoveredControl == "month" {
                                 adjustMonth(by: 1)
@@ -183,6 +201,15 @@ struct CalendarView: View {
                     }
                     return event
                 }
+            }
+            .onChange(of: selectedDay) {
+                updateTODOsForSelectedDay()
+            }
+            .onChange(of: todoViewModel?.todos) {
+                refreshTODOCounts()
+            }
+            .onChange(of: currentMonth) {
+                refreshTODOCounts()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -279,6 +306,47 @@ struct CalendarView: View {
         }
         selectedRoute = .journal
     }
+
+    private func updateTODOsForSelectedDay() {
+        guard let selectedDay = selectedDay else {
+            todoViewModel?.loadTODOs(for: nil)
+            return
+        }
+
+        let entries = entriesForSelectedDay(selectedDay)
+        let entry = entries.first
+        todoViewModel?.loadTODOs(for: entry)
+    }
+
+    private func refreshTODOCounts() {
+        var newCounts: [String: (incomplete: Int, completed: Int)] = [:]
+
+        for day in daysInMonth {
+            guard let day = day else { continue }
+            let entries = entriesForSelectedDay(day)
+            guard let firstEntry = entries.first else { continue }
+
+            let todos = entryListViewModel.fileService.loadTODOs(for: firstEntry)
+            let incomplete = todos.filter { !$0.completed }.count
+            let completed = todos.filter { $0.completed }.count
+
+            let dateKey = dateKey(for: day)
+            newCounts[dateKey] = (incomplete, completed)
+        }
+
+        todoCounts = newCounts
+    }
+
+    private func dateKey(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    private func todosForDay(_ date: Date) -> (incomplete: Int, completed: Int) {
+        let key = dateKey(for: date)
+        return todoCounts[key] ?? (0, 0)
+    }
 }
 
 struct DayCell: View {
@@ -287,9 +355,11 @@ struct DayCell: View {
     let isToday: Bool
     let isSelected: Bool
     let theme: Theme
-    
+    let incompleteTodoCount: Int
+    let completedTodoCount: Int
+
     private let calendar = Calendar.current
-    
+
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
@@ -302,11 +372,30 @@ struct DayCell: View {
                 Text("\(calendar.component(.day, from: day))")
                     .font(.system(size: 16))
                     .foregroundColor(textColor)
-                
+
                 if hasEntry {
                     Circle()
                         .fill(theme.accentColor)
                         .frame(width: 6, height: 6)
+                } else {
+                    Spacer()
+                        .frame(height: 6)
+                }
+
+                if incompleteTodoCount > 0 || completedTodoCount > 0 {
+                    HStack(spacing: 3) {
+                        ForEach(0..<min(incompleteTodoCount, 3), id: \.self) { _ in
+                            Circle()
+                                .stroke(theme.tertiaryText.opacity(0.6), lineWidth: 1)
+                                .frame(width: 5, height: 5)
+                        }
+                        ForEach(0..<min(completedTodoCount, 3), id: \.self) { _ in
+                            Circle()
+                                .fill(theme.tertiaryText.opacity(0.6))
+                                .frame(width: 5, height: 5)
+                        }
+                    }
+                    .frame(height: 6)
                 } else {
                     Spacer()
                         .frame(height: 6)

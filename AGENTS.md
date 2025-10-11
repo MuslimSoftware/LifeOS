@@ -30,6 +30,7 @@ freewrite/
 ├── Core/
 │   ├── Models/
 │   │   ├── HumanEntry.swift           # Entry data model (struct)
+│   │   ├── TODOItem.swift             # TODO item model with optional dueTime
 │   │   ├── AppSettings.swift          # User preferences (@Observable)
 │   │   └── Theme.swift                # Theme colors & styles
 │   ├── Services/
@@ -70,7 +71,9 @@ freewrite/
 │   │       ├── TimerButtonView.swift      # Focus timer
 │   │       └── FontSelectorView.swift     # Font customization
 │   ├── Calendar/
-│   │   └── CalendarView.swift         # Date picker & entry calendar
+│   │   ├── CalendarView.swift         # Date picker & entry calendar
+│   │   ├── TODOListView.swift         # TODO list UI with TimePickerView
+│   │   └── TODOViewModel.swift        # TODO state management
 │   ├── Import/
 │   │   ├── ImportView.swift           # Image/PDF import UI
 │   │   ├── ImportViewModel.swift      # Import state management
@@ -172,13 +175,56 @@ groupedEntries = groupEntriesByDate(entries)  // ← UI sync!
 date: Jan 15
 year: 2025
 ---
+## TODOs
+- [ ] Buy groceries @3:30 PM
+- [x] Complete project report
+
+## Journal
 Entry content goes here...
 ```
 
-**Key Files**:
-- `FileManagerService.swift` - Save/load/delete operations
+**How File Editing Works**:
+- Files have three distinct sections: metadata (YAML frontmatter), TODOs, and Journal
+- `extractTODOSection()` extracts content between `## TODOs` and `## Journal`
+- `extractJournalSection()` extracts everything after `## Journal\n`
+- When saving, always preserve the TODO section from disk to prevent overwrites
+- Journal content is updated from the editor, TODOs are managed separately
 
-### 6. **Focus Timer**
+**Key Files**:
+- `FileManagerService.swift` - Save/load/delete operations, TODO parsing/saving
+
+### 6. **TODO Management**
+**What**: Per-entry TODO lists with optional due times, inline editing, and calendar indicators.
+
+**Storage**:
+- TODOs stored in `## TODOs` section of markdown files
+- Format: `- [ ] Task text @3:30 PM` or `- [x] Completed task`
+- Time is parsed and stored separately in `dueTime: Date?` property
+- `parseTODOs()` and `saveTODOs()` handle conversion between disk format and in-memory model
+
+**UI Features**:
+- Click TODO text to edit inline (TextField replaces Text)
+- Save on Enter/focus-loss, cancel on Escape
+- Scroll-based time picker with debounced saves (0.5s delay, threshold: 3)
+- Global scroll monitor in TODOListView parent prevents UI blocking
+- Completed TODOs are read-only (no text/time editing, dimmed color only)
+- Delete button appears on hover
+
+**Calendar Integration**:
+- Day cells show TODO indicators (3rd row below journal dot)
+- Empty circles (○) for incomplete, filled (●) for completed (max 3 visible)
+- Auto-updates via `@Observable` pattern when TODOs change
+- Cached in `todoCounts: [String: (incomplete, completed)]` for performance
+- `refreshTODOCounts()` updates cache on month change or TODO modifications
+
+**Key Files**:
+- `TODOItem.swift` - Data model (Identifiable, Codable, Equatable) with `dueTime: Date?`
+- `TODOViewModel.swift` - State management, CRUD operations, `updateTODOTime(saveImmediately:)`
+- `TODOListView.swift` - Main list, row view with inline editing, time picker with scroll handling
+- `CalendarView.swift` - Calendar grid with TODO indicators, `todosForDay()` helper
+- `FileManagerService.swift` - Disk I/O, `loadTODOs()`, `saveTODOs()`, `parseTODOs()`
+
+### 7. **Focus Timer**
 **What**: Optional focus timer that auto-hides bottom nav when running.
 
 **Key Files**:
@@ -294,6 +340,38 @@ groupedEntries = groupEntriesByDate(entries)
 draftEntry = nil
 ```
 
+### Adding a TODO
+```swift
+let newTODO = TODOItem(text: "Buy groceries", completed: false)
+todos.append(newTODO)
+fileService.saveTODOs(todos, for: entry)
+```
+
+### Updating TODO Time
+```swift
+// Create new instance with updated dueTime
+let calendar = Calendar.current
+var components = DateComponents()
+components.hour = 15  // 3 PM in 24-hour
+components.minute = 30
+let newTime = calendar.date(from: components)
+
+todos[index] = TODOItem(
+    id: todos[index].id,
+    text: todos[index].text,
+    completed: todos[index].completed,
+    createdAt: todos[index].createdAt,
+    dueTime: newTime
+)
+fileService.saveTODOs(todos, for: entry)
+```
+
+### Loading TODOs for Entry
+```swift
+let todos = fileService.loadTODOs(for: entry)
+// Returns [TODOItem] with parsed text and dueTime
+```
+
 ---
 
 ## ⚠️ Important Gotchas
@@ -351,6 +429,45 @@ OpenAI API requires network access:
 <true/>
 ```
 
+### 6. **TODO Section Preservation**
+When saving journal content, always preserve the TODO section:
+```swift
+// ❌ Wrong - overwrites entire file, loses TODOs
+try content.write(to: fileURL, atomically: true, encoding: .utf8)
+
+// ✅ Correct - load existing TODOs first
+let existingContent = try? String(contentsOf: fileURL, encoding: .utf8)
+let todoSection = existingContent != nil ? extractTODOSection(from: existingContent!) : ""
+// Then reconstruct with metadata + todoSection + journal
+```
+
+### 7. **TODO Time Format**
+Time is stored in markdown as `@H:MM AM/PM`, but stripped from text in TODOItem:
+```swift
+// In file: - [ ] Buy groceries @3:30 PM
+// TODOItem.text: "Buy groceries"  (no time)
+// TODOItem.dueTime: Date(hour: 15, minute: 30)  (24-hour format)
+
+// When saving, time is reconstructed and appended
+```
+
+### 8. **TODOItem is a Struct**
+Like HumanEntry, TODOItem is a struct. When updating, create new instance:
+```swift
+// ❌ Wrong - can't mutate struct copy
+var todo = todos[0]
+todo.completed = true  // todos[0] unchanged!
+
+// ✅ Correct - replace with new instance
+todos[index] = TODOItem(
+    id: todos[index].id,
+    text: todos[index].text,
+    completed: !todos[index].completed,
+    createdAt: todos[index].createdAt,
+    dueTime: todos[index].dueTime
+)
+```
+
 ---
 
 ## 📝 Coding Conventions
@@ -388,10 +505,14 @@ OpenAI API requires network access:
 - **Update entry list UI** → `EntryListView.swift`
 - **Modify grouping logic** → `EntryListViewModel.groupEntriesByDate()`
 - **Change auto-save** → `ContentView.swift` `onChange` handler
+- **Add/modify TODOs** → `TODOViewModel.swift`, `TODOListView.swift`
+- **Change TODO parsing/saving** → `FileManagerService.swift` (`parseTODOs`, `saveTODOs`)
+- **Update calendar/TODO UI** → `CalendarView.swift`
 - **Add new feature** → Create folder in `Features/`
 - **Modify theme colors** → `Theme.swift`
 - **Update app settings** → `AppSettings.swift`
 - **Change entry model** → `HumanEntry.swift`
+- **Change TODO model** → `TODOItem.swift`
 
 ---
 
