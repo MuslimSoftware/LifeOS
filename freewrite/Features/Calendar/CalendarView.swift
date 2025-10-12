@@ -18,160 +18,206 @@ struct CalendarView: View {
     private let daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     
     var body: some View {
-        VStack(spacing: 0) {
-            Text(monthString)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundColor(theme.primaryText)
-                .padding(.top, 40)
-                .padding(.bottom, 32)
-            
-            VStack(spacing: 12) {
-                HStack(spacing: 0) {
-                    ForEach(daysOfWeek, id: \.self) { day in
-                        Text(day)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(theme.secondaryText)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
-                    ForEach(Array(daysInMonth.enumerated()), id: \.offset) { index, day in
-                        if let day = day {
-                            let todoCounts = todosForDay(day)
-                            DayCell(
-                                day: day,
-                                hasEntry: hasEntry(for: day),
-                                isToday: isToday(day),
-                                isSelected: isSelected(day),
-                                theme: theme,
-                                incompleteTodoCount: todoCounts.incomplete,
-                                completedTodoCount: todoCounts.completed
-                            )
-                            .frame(height: 80)
-                            .frame(maxWidth: .infinity)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                selectedDay = day
-                            }
-                        } else {
-                            Color.clear
-                                .frame(height: 80)
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 40)
-            
-            if let selectedDay = selectedDay, !entriesForSelectedDay(selectedDay).isEmpty, let todoVM = todoViewModel {
-                HStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Journal")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(theme.primaryText)
-                            .padding(.horizontal, 40)
-                            .padding(.top, 24)
-                            .padding(.bottom, 16)
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                // Top section: Month title + Calendar grid
+                VStack(spacing: 0) {
+                    Text(monthString)
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(theme.primaryText)
+                        .padding(.top, 40)
+                        .padding(.bottom, 40)
 
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 12) {
-                                ForEach(entriesForSelectedDay(selectedDay)) { entry in
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        if !entry.previewText.isEmpty {
-                                            Text(entry.previewText)
-                                                .font(.system(size: 14))
-                                                .foregroundColor(theme.primaryText)
-                                                .lineLimit(1)
-                                        } else {
-                                            Text("Empty entry")
-                                                .font(.system(size: 14))
-                                                .foregroundColor(theme.tertiaryText)
-                                                .italic()
-                                        }
-                                    }
-                                    .padding(16)
-                                    .background(theme.dividerColor.opacity(0.15))
-                                    .cornerRadius(8)
+                    VStack(spacing: 12) {
+                        HStack(spacing: 0) {
+                            ForEach(daysOfWeek, id: \.self) { day in
+                                Text(day)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(theme.secondaryText)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
+                            ForEach(Array(daysInMonth.enumerated()), id: \.offset) { index, day in
+                                if let day = day {
+                                    let todoCounts = todosForDay(day)
+                                    DayCell(
+                                        day: day,
+                                        hasEntry: hasEntry(for: day),
+                                        isToday: isToday(day),
+                                        isSelected: isSelected(day),
+                                        theme: theme,
+                                        incompleteTodoCount: todoCounts.incomplete,
+                                        completedTodoCount: todoCounts.completed
+                                    )
+                                    .frame(height: 80)
+                                    .frame(maxWidth: .infinity)
+                                    .contentShape(Rectangle())
                                     .onTapGesture {
-                                        openEntry(entry)
+                                        selectedDay = day
                                     }
-                                    .onHover { hovering in
-                                        if hovering {
-                                            NSCursor.pointingHand.push()
-                                        } else {
-                                            NSCursor.pop()
-                                        }
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                } else {
+                                    Color.clear
+                                        .frame(height: 80)
                                 }
                             }
-                            .padding(.horizontal, 40)
-                            .padding(.bottom, 20)
                         }
-                        .frame(height: 180)
                     }
-                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 40)
+                }
 
-                    TODOListView()
-                        .environment(todoVM)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            
-            Spacer()
-            
-            HStack {
-                Spacer()
-                
-                HStack(spacing: 20) {
-                    Text(monthString)
-                    .font(.system(size: 13))
-                    .foregroundColor(hoveredControl == "month" ? theme.buttonTextHover : theme.buttonText)
-                    .onHover { hovering in
-                        hoveredControl = hovering ? "month" : nil
-                        if hovering {
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
+                // Bottom section: Journal + TODO (always present, conditionally shows content)
+                VStack(spacing: 0) {
+                    if let selectedDay = selectedDay, let todoVM = todoViewModel {
+                        HStack(spacing: 0) {
+                            // Journal section - always show
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("Journal")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(theme.primaryText)
+                                    .padding(.horizontal, 40)
+                                    .padding(.top, 24)
+                                    .padding(.bottom, 16)
+
+                                if !entriesForSelectedDay(selectedDay).isEmpty {
+                                    // Show existing entries
+                                    ScrollView {
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            ForEach(entriesForSelectedDay(selectedDay)) { entry in
+                                                VStack(alignment: .leading, spacing: 6) {
+                                                    if !entry.previewText.isEmpty {
+                                                        Text(entry.previewText)
+                                                            .font(.system(size: 14))
+                                                            .foregroundColor(theme.primaryText)
+                                                            .lineLimit(1)
+                                                    } else {
+                                                        Text("Empty entry")
+                                                            .font(.system(size: 14))
+                                                            .foregroundColor(theme.tertiaryText)
+                                                            .italic()
+                                                    }
+                                                }
+                                                .padding(16)
+                                                .background(theme.dividerColor.opacity(0.15))
+                                                .cornerRadius(8)
+                                                .onTapGesture {
+                                                    openEntry(entry)
+                                                }
+                                                .onHover { hovering in
+                                                    if hovering {
+                                                        NSCursor.pointingHand.push()
+                                                    } else {
+                                                        NSCursor.pop()
+                                                    }
+                                                }
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                            }
+                                        }
+                                        .padding(.horizontal, 40)
+                                        .padding(.bottom, 20)
+                                    }
+                                    .frame(height: 180)
+                                } else {
+                                    // Show "+" button to create journal entry
+                                    ScrollView {
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            Button(action: {
+                                                createJournalForSelectedDay()
+                                            }) {
+                                                Image(systemName: "plus.circle")
+                                                    .font(.system(size: 16))
+                                                    .foregroundColor(theme.secondaryText)
+                                                    .padding(12)
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                                    .background(theme.dividerColor.opacity(0.1))
+                                                    .cornerRadius(8)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .onHover { hovering in
+                                                if hovering {
+                                                    NSCursor.pointingHand.push()
+                                                } else {
+                                                    NSCursor.pop()
+                                                }
+                                            }
+                                        }
+                                        .padding(.horizontal, 40)
+                                        .padding(.bottom, 20)
+                                    }
+                                    .frame(height: 180)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+
+                            // TODO section - always show for selected day
+                            TODOListView()
+                                .environment(todoVM)
+                                .frame(maxWidth: .infinity)
                         }
-                    }
-                
-                Text("•")
-                    .foregroundColor(theme.separatorColor)
-                
-                Text(verbatim: yearString)
-                    .font(.system(size: 13))
-                    .foregroundColor(hoveredControl == "year" ? theme.buttonTextHover : theme.buttonText)
-                    .onHover { hovering in
-                        hoveredControl = hovering ? "year" : nil
-                        if hovering {
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
-                        }
-                    }
-                
-                Text("•")
-                    .foregroundColor(theme.separatorColor)
-                
-                Button(action: goToToday) {
-                    Text("Today")
-                        .font(.system(size: 13))
-                        .foregroundColor(hoveredControl == "today" ? theme.buttonTextHover : theme.buttonText)
-                }
-                .buttonStyle(.plain)
-                .onHover { hovering in
-                    hoveredControl = hovering ? "today" : nil
-                    if hovering {
-                        NSCursor.pointingHand.push()
                     } else {
-                        NSCursor.pop()
+                        Color.clear
                     }
                 }
+                .frame(height: 220)
+
+                Spacer()
+
+                // Footer: Navigation controls
+                HStack {
+                    Spacer()
+
+                    HStack(spacing: 20) {
+                        Text(monthString)
+                        .font(.system(size: 13))
+                        .foregroundColor(hoveredControl == "month" ? theme.buttonTextHover : theme.buttonText)
+                        .onHover { hovering in
+                            hoveredControl = hovering ? "month" : nil
+                            if hovering {
+                                NSCursor.pointingHand.push()
+                            } else {
+                                NSCursor.pop()
+                            }
+                        }
+
+                    Text("•")
+                        .foregroundColor(theme.separatorColor)
+
+                    Text(verbatim: yearString)
+                        .font(.system(size: 13))
+                        .foregroundColor(hoveredControl == "year" ? theme.buttonTextHover : theme.buttonText)
+                        .onHover { hovering in
+                            hoveredControl = hovering ? "year" : nil
+                            if hovering {
+                                NSCursor.pointingHand.push()
+                            } else {
+                                NSCursor.pop()
+                            }
+                        }
+
+                    Text("•")
+                        .foregroundColor(theme.separatorColor)
+
+                    Button(action: goToToday) {
+                        Text("Today")
+                            .font(.system(size: 13))
+                            .foregroundColor(hoveredControl == "today" ? theme.buttonTextHover : theme.buttonText)
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hovering in
+                        hoveredControl = hovering ? "today" : nil
+                        if hovering {
+                            NSCursor.pointingHand.push()
+                        } else {
+                            NSCursor.pop()
+                        }
+                    }
+                    }
+                    .padding(8)
                 }
-                .padding(8)
+                .padding()
+                .frame(height: 60)
             }
-            .padding()
             .onAppear {
                 if todoViewModel == nil {
                     todoViewModel = TODOViewModel(fileService: entryListViewModel.fileService)
@@ -284,7 +330,9 @@ struct CalendarView: View {
     }
     
     private func goToToday() {
-        currentMonth = Date()
+        let today = Date()
+        currentMonth = today
+        selectedDay = today
     }
     
     private func entriesForSelectedDay(_ date: Date) -> [HumanEntry] {
@@ -307,15 +355,73 @@ struct CalendarView: View {
         selectedRoute = .journal
     }
 
+    private func createJournalForSelectedDay() {
+        guard let selectedDay = selectedDay else { return }
+
+        // Check if a TODO-only file already exists for this date
+        if let existingFilename = entryListViewModel.fileService.findExistingFileForDate(date: selectedDay) {
+            // Case 2: TODO-only file exists - convert it to a journal entry
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "MMM d"
+            let displayDate = dateFormatter.string(from: selectedDay)
+            let year = calendar.component(.year, from: selectedDay)
+
+            // Extract UUID from existing filename
+            if let uuidMatch = existingFilename.range(of: "\\[(.*?)\\]", options: .regularExpression),
+               let uuid = UUID(uuidString: String(existingFilename[uuidMatch].dropFirst().dropLast())) {
+
+                let entry = HumanEntry(
+                    id: uuid,
+                    date: displayDate,
+                    filename: existingFilename,
+                    previewText: "",
+                    year: year
+                )
+
+                // Add to entries list and update grouping
+                entryListViewModel.addEntryAndRefresh(entry)
+                entryListViewModel.expandSectionsForEntry(entry)
+                entryListViewModel.selectedEntryId = entry.id
+
+                // Load existing content (will be empty journal section)
+                if let content = entryListViewModel.loadEntry(entry: entry) {
+                    editorViewModel.text = content
+                } else {
+                    editorViewModel.text = ""
+                }
+
+                selectedRoute = .journal
+            }
+        } else {
+            // Case 3: No file exists - create new entry
+            let newEntry = HumanEntry.createWithDate(date: selectedDay)
+
+            // Add to entries list
+            entryListViewModel.addEntryAndRefresh(newEntry)
+
+            // Save empty entry
+            entryListViewModel.fileService.saveEntry(newEntry, content: "")
+
+            // Expand and select
+            entryListViewModel.expandSectionsForEntry(newEntry)
+            entryListViewModel.selectedEntryId = newEntry.id
+
+            // Clear editor
+            editorViewModel.text = ""
+
+            selectedRoute = .journal
+        }
+    }
+
     private func updateTODOsForSelectedDay() {
         guard let selectedDay = selectedDay else {
-            todoViewModel?.loadTODOs(for: nil)
+            todoViewModel?.loadTODOs(for: nil, date: nil)
             return
         }
 
         let entries = entriesForSelectedDay(selectedDay)
         let entry = entries.first
-        todoViewModel?.loadTODOs(for: entry)
+        todoViewModel?.loadTODOs(for: entry, date: selectedDay)
     }
 
     private func refreshTODOCounts() {
@@ -323,15 +429,16 @@ struct CalendarView: View {
 
         for day in daysInMonth {
             guard let day = day else { continue }
-            let entries = entriesForSelectedDay(day)
-            guard let firstEntry = entries.first else { continue }
 
-            let todos = entryListViewModel.fileService.loadTODOs(for: firstEntry)
+            // Load TODOs for this date (includes TODO-only files)
+            let todos = entryListViewModel.fileService.loadTODOsForDate(date: day)
             let incomplete = todos.filter { !$0.completed }.count
             let completed = todos.filter { $0.completed }.count
 
-            let dateKey = dateKey(for: day)
-            newCounts[dateKey] = (incomplete, completed)
+            if incomplete > 0 || completed > 0 {
+                let dateKey = dateKey(for: day)
+                newCounts[dateKey] = (incomplete, completed)
+            }
         }
 
         todoCounts = newCounts

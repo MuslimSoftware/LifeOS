@@ -171,8 +171,15 @@ class FileManagerService {
                     let preview = journalContent
                         .replacingOccurrences(of: "\n", with: " ")
                         .trimmingCharacters(in: .whitespacesAndNewlines)
-                    let truncated = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
-                    
+
+                    // Skip entries with empty journal content (TODO-only files)
+                    guard !preview.isEmpty else {
+                        print("Skipping TODO-only entry: \(filename)")
+                        return nil
+                    }
+
+                    let truncated = preview.count > 100 ? String(preview.prefix(100)) + "..." : preview
+
                     return (
                         entry: HumanEntry(
                             id: uuid,
@@ -286,14 +293,65 @@ class FileManagerService {
     
     func loadTODOs(for entry: HumanEntry) -> [TODOItem] {
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
-        
+
         guard fileManager.fileExists(atPath: fileURL.path),
               let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
             return []
         }
-        
+
         let todoSection = extractTODOSection(from: content)
         return parseTODOs(from: todoSection)
+    }
+
+    func loadTODOsForDate(date: Date) -> [TODOItem] {
+        // Find any file (including TODO-only files) for this date
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MMM d"
+        let dateString = dateFormatter.string(from: date)
+        let year = Calendar.current.component(.year, from: date)
+
+        do {
+            let fileURLs = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
+            let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
+
+            for fileURL in mdFiles {
+                let content = try String(contentsOf: fileURL, encoding: .utf8)
+                if let metadata = parseMetadata(from: content),
+                   metadata.date == dateString && metadata.year == year {
+                    let todoSection = extractTODOSection(from: content)
+                    return parseTODOs(from: todoSection)
+                }
+            }
+        } catch {
+            print("Error loading TODOs for date: \(error)")
+        }
+
+        return []
+    }
+
+    func findExistingFileForDate(date: Date) -> String? {
+        // Find any file (including TODO-only files) for this date
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MMM d"
+        let dateString = dateFormatter.string(from: date)
+        let year = Calendar.current.component(.year, from: date)
+
+        do {
+            let fileURLs = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
+            let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
+
+            for fileURL in mdFiles {
+                let content = try String(contentsOf: fileURL, encoding: .utf8)
+                if let metadata = parseMetadata(from: content),
+                   metadata.date == dateString && metadata.year == year {
+                    return fileURL.lastPathComponent
+                }
+            }
+        } catch {
+            print("Error finding file for date: \(error)")
+        }
+
+        return nil
     }
     
     private func parseTODOs(from todoSection: String) -> [TODOItem] {

@@ -5,24 +5,39 @@ class TODOViewModel {
     var todos: [TODOItem] = []
     private let fileService: FileManagerService
     private var currentEntry: HumanEntry?
+    private var selectedDate: Date?
 
     init(fileService: FileManagerService) {
         self.fileService = fileService
     }
 
-    func loadTODOs(for entry: HumanEntry?) {
-        guard let entry = entry else {
-            todos = []
-            currentEntry = nil
-            return
-        }
+    func loadTODOs(for entry: HumanEntry?, date: Date? = nil) {
+        selectedDate = date
 
-        currentEntry = entry
-        todos = fileService.loadTODOs(for: entry)
+        if let entry = entry {
+            currentEntry = entry
+            todos = fileService.loadTODOs(for: entry)
+        } else if let date = date {
+            // No journal entry exists, but check if there's a TODO-only file for this date
+            todos = fileService.loadTODOsForDate(date: date)
+            currentEntry = nil
+        } else {
+            currentEntry = nil
+            todos = []
+        }
     }
 
     func addTODO(text: String) {
-        guard let entry = currentEntry, !text.isEmpty else { return }
+        guard !text.isEmpty else { return }
+
+        // If no entry exists, create one for the selected date
+        if currentEntry == nil, let date = selectedDate {
+            currentEntry = HumanEntry.createWithDate(date: date)
+            // Save the new entry with empty journal content
+            fileService.saveEntry(currentEntry!, content: "")
+        }
+
+        guard let entry = currentEntry else { return }
 
         let newTODO = TODOItem(text: text, completed: false)
         todos.append(newTODO)

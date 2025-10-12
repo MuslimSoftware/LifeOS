@@ -105,14 +105,19 @@ class EntryListViewModel {
     
     func createDraftEntry() -> String {
         let newEntry = HumanEntry.createNew()
-        
+
         draftEntry = newEntry
         selectedEntryId = newEntry.id
-        
+
         print("Draft entry created: \(newEntry.id)")
         return ""
     }
-    
+
+    func addEntryAndRefresh(_ entry: HumanEntry) {
+        entries.insert(entry, at: 0)
+        groupedEntries = groupEntriesByDate(entries)
+    }
+
     func loadEntry(entry: HumanEntry) -> String? {
         return fileService.loadEntry(entry)
     }
