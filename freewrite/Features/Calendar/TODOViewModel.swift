@@ -18,7 +18,6 @@ class TODOViewModel {
             currentEntry = entry
             todos = fileService.loadTODOs(for: entry)
         } else if let date = date {
-            // No journal entry exists, but check if there's a TODO-only file for this date
             todos = fileService.loadTODOsForDate(date: date)
             currentEntry = nil
         } else {
@@ -30,10 +29,8 @@ class TODOViewModel {
     func addTODO(text: String) {
         guard !text.isEmpty else { return }
 
-        // If no entry exists, create one for the selected date
         if currentEntry == nil, let date = selectedDate {
             currentEntry = HumanEntry.createWithDate(date: date)
-            // Save the new entry with empty journal content
             fileService.saveEntry(currentEntry!, content: "")
         }
 

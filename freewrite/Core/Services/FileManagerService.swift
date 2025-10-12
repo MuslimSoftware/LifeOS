@@ -172,7 +172,6 @@ class FileManagerService {
                         .replacingOccurrences(of: "\n", with: " ")
                         .trimmingCharacters(in: .whitespacesAndNewlines)
 
-                    // Skip entries with empty journal content (TODO-only files)
                     guard !preview.isEmpty else {
                         print("Skipping TODO-only entry: \(filename)")
                         return nil
@@ -304,7 +303,6 @@ class FileManagerService {
     }
 
     func loadTODOsForDate(date: Date) -> [TODOItem] {
-        // Find any file (including TODO-only files) for this date
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MMM d"
         let dateString = dateFormatter.string(from: date)
@@ -330,7 +328,6 @@ class FileManagerService {
     }
 
     func findExistingFileForDate(date: Date) -> String? {
-        // Find any file (including TODO-only files) for this date
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MMM d"
         let dateString = dateFormatter.string(from: date)

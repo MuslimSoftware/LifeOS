@@ -202,6 +202,14 @@ Entry content goes here...
 - Time is parsed and stored separately in `dueTime: Date?` property
 - `parseTODOs()` and `saveTODOs()` handle conversion between disk format and in-memory model
 
+**TODO-Only Files**:
+- Files can exist with TODOs but no journal content (empty `## Journal` section)
+- These files are automatically created when adding TODOs to a date without a journal entry
+- TODO-only files are excluded from journal history (`loadExistingEntries` filters them out)
+- `loadTODOsForDate(date:)` finds TODOs for any date, including from TODO-only files
+- `findExistingFileForDate(date:)` checks if any file exists for a date
+- When creating a journal entry for a date with a TODO-only file, it's converted to a regular entry
+
 **UI Features**:
 - Click TODO text to edit inline (TextField replaces Text)
 - Save on Enter/focus-loss, cancel on Escape
@@ -213,18 +221,57 @@ Entry content goes here...
 **Calendar Integration**:
 - Day cells show TODO indicators (3rd row below journal dot)
 - Empty circles (○) for incomplete, filled (●) for completed (max 3 visible)
+- Indicators shown for both regular entries and TODO-only files
 - Auto-updates via `@Observable` pattern when TODOs change
 - Cached in `todoCounts: [String: (incomplete, completed)]` for performance
-- `refreshTODOCounts()` updates cache on month change or TODO modifications
+- `refreshTODOCounts()` uses `loadTODOsForDate()` to include TODO-only files
 
 **Key Files**:
 - `TODOItem.swift` - Data model (Identifiable, Codable, Equatable) with `dueTime: Date?`
-- `TODOViewModel.swift` - State management, CRUD operations, `updateTODOTime(saveImmediately:)`
+- `TODOViewModel.swift` - State management, CRUD operations, auto-creates entry on first TODO
 - `TODOListView.swift` - Main list, row view with inline editing, time picker with scroll handling
-- `CalendarView.swift` - Calendar grid with TODO indicators, `todosForDay()` helper
-- `FileManagerService.swift` - Disk I/O, `loadTODOs()`, `saveTODOs()`, `parseTODOs()`
+- `CalendarView.swift` - Calendar grid with TODO indicators, journal/TODO side-by-side view
+- `FileManagerService.swift` - Disk I/O, `loadTODOsForDate()`, `findExistingFileForDate()`
 
-### 7. **Focus Timer**
+### 7. **Calendar Page**
+**What**: Monthly calendar view showing entries and TODOs with side-by-side journal/TODO interface.
+
+**Layout**:
+- Top: Month name and calendar grid (6x7 or 5x7 depending on month)
+- Bottom: Split view with Journal section (left) and TODO section (right)
+- Footer: Month/Year navigation and "Today" button
+
+**Journal Section**:
+- Always visible when a day is selected
+- Shows list of journal entries if they exist
+- Shows "+" button if no journal entry exists for the date
+- Clicking "+" creates entry and navigates to journal page
+- Handles conversion of TODO-only files to regular entries
+
+**TODO Section**:
+- Always visible when a day is selected
+- Shows TODOs for the selected date (from entry or TODO-only file)
+- Allows adding TODOs to any date without creating journal entry
+- Auto-creates TODO-only file on first TODO if no entry exists
+
+**Day Cell Indicators**:
+- Blue dot: Journal entry exists
+- Empty circles (○): Incomplete TODOs
+- Filled circles (●): Completed TODOs
+- Max 3 TODO indicators shown per day
+
+**Key Methods**:
+- `createJournalForSelectedDay()` - Creates entry or converts TODO-only file
+- `updateTODOsForSelectedDay()` - Loads TODOs including from TODO-only files
+- `refreshTODOCounts()` - Updates indicators for all days in month
+- `entriesForSelectedDay()` - Filters entries by date
+
+**Key Files**:
+- `CalendarView.swift` - Main calendar UI and logic
+- `TODOListView.swift` - TODO interface component
+- `TODOViewModel.swift` - TODO state with date tracking
+
+### 8. **Focus Timer**
 **What**: Optional focus timer that auto-hides bottom nav when running.
 
 **Key Files**:
@@ -507,7 +554,9 @@ todos[index] = TODOItem(
 - **Change auto-save** → `ContentView.swift` `onChange` handler
 - **Add/modify TODOs** → `TODOViewModel.swift`, `TODOListView.swift`
 - **Change TODO parsing/saving** → `FileManagerService.swift` (`parseTODOs`, `saveTODOs`)
+- **Handle TODO-only files** → `FileManagerService.swift` (`loadTODOsForDate`, `findExistingFileForDate`)
 - **Update calendar/TODO UI** → `CalendarView.swift`
+- **Calendar journal creation** → `CalendarView.createJournalForSelectedDay()`
 - **Add new feature** → Create folder in `Features/`
 - **Modify theme colors** → `Theme.swift`
 - **Update app settings** → `AppSettings.swift`

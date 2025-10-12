@@ -20,7 +20,6 @@ struct CalendarView: View {
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
-                // Top section: Month title + Calendar grid
                 VStack(spacing: 0) {
                     Text(monthString)
                         .font(.system(size: 28, weight: .bold))
@@ -67,11 +66,9 @@ struct CalendarView: View {
                     .padding(.horizontal, 40)
                 }
 
-                // Bottom section: Journal + TODO (always present, conditionally shows content)
                 VStack(spacing: 0) {
                     if let selectedDay = selectedDay, let todoVM = todoViewModel {
                         HStack(spacing: 0) {
-                            // Journal section - always show
                             VStack(alignment: .leading, spacing: 0) {
                                 Text("Journal")
                                     .font(.system(size: 20, weight: .semibold))
@@ -81,7 +78,6 @@ struct CalendarView: View {
                                     .padding(.bottom, 16)
 
                                 if !entriesForSelectedDay(selectedDay).isEmpty {
-                                    // Show existing entries
                                     ScrollView {
                                         VStack(alignment: .leading, spacing: 12) {
                                             ForEach(entriesForSelectedDay(selectedDay)) { entry in
@@ -119,7 +115,6 @@ struct CalendarView: View {
                                     }
                                     .frame(height: 180)
                                 } else {
-                                    // Show "+" button to create journal entry
                                     ScrollView {
                                         VStack(alignment: .leading, spacing: 12) {
                                             Button(action: {
@@ -150,7 +145,6 @@ struct CalendarView: View {
                             }
                             .frame(maxWidth: .infinity)
 
-                            // TODO section - always show for selected day
                             TODOListView()
                                 .environment(todoVM)
                                 .frame(maxWidth: .infinity)
@@ -163,7 +157,6 @@ struct CalendarView: View {
 
                 Spacer()
 
-                // Footer: Navigation controls
                 HStack {
                     Spacer()
 
@@ -358,15 +351,12 @@ struct CalendarView: View {
     private func createJournalForSelectedDay() {
         guard let selectedDay = selectedDay else { return }
 
-        // Check if a TODO-only file already exists for this date
         if let existingFilename = entryListViewModel.fileService.findExistingFileForDate(date: selectedDay) {
-            // Case 2: TODO-only file exists - convert it to a journal entry
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "MMM d"
             let displayDate = dateFormatter.string(from: selectedDay)
             let year = calendar.component(.year, from: selectedDay)
 
-            // Extract UUID from existing filename
             if let uuidMatch = existingFilename.range(of: "\\[(.*?)\\]", options: .regularExpression),
                let uuid = UUID(uuidString: String(existingFilename[uuidMatch].dropFirst().dropLast())) {
 
@@ -378,12 +368,10 @@ struct CalendarView: View {
                     year: year
                 )
 
-                // Add to entries list and update grouping
                 entryListViewModel.addEntryAndRefresh(entry)
                 entryListViewModel.expandSectionsForEntry(entry)
                 entryListViewModel.selectedEntryId = entry.id
 
-                // Load existing content (will be empty journal section)
                 if let content = entryListViewModel.loadEntry(entry: entry) {
                     editorViewModel.text = content
                 } else {
@@ -393,22 +381,14 @@ struct CalendarView: View {
                 selectedRoute = .journal
             }
         } else {
-            // Case 3: No file exists - create new entry
             let newEntry = HumanEntry.createWithDate(date: selectedDay)
 
-            // Add to entries list
             entryListViewModel.addEntryAndRefresh(newEntry)
-
-            // Save empty entry
             entryListViewModel.fileService.saveEntry(newEntry, content: "")
-
-            // Expand and select
             entryListViewModel.expandSectionsForEntry(newEntry)
             entryListViewModel.selectedEntryId = newEntry.id
 
-            // Clear editor
             editorViewModel.text = ""
-
             selectedRoute = .journal
         }
     }
@@ -430,7 +410,6 @@ struct CalendarView: View {
         for day in daysInMonth {
             guard let day = day else { continue }
 
-            // Load TODOs for this date (includes TODO-only files)
             let todos = entryListViewModel.fileService.loadTODOsForDate(date: day)
             let incomplete = todos.filter { !$0.completed }.count
             let completed = todos.filter { $0.completed }.count
