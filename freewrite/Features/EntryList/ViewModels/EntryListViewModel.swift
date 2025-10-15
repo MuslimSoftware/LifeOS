@@ -34,7 +34,6 @@ class EntryListViewModel {
     func loadExistingEntries() -> String? {
         entries = fileService.loadExistingEntries()
         groupedEntries = groupEntriesByDate(entries)
-        print("Successfully loaded and grouped \(entries.count) entries")
         
         let currentYear = Calendar.current.component(.year, from: Date())
         let currentMonth = Calendar.current.component(.month, from: Date())
@@ -54,12 +53,10 @@ class EntryListViewModel {
         }
         
         let hasOnlyWelcomeEntry = entries.count == 1 && fileService.entryContainsWelcomeMessage(entries[0])
-        
+
         if entries.isEmpty {
-            print("First time user, creating welcome entry")
             return createNewEntry(withWelcomeMessage: true)
         } else if !hasEmptyEntryToday && !hasOnlyWelcomeEntry {
-            print("Creating draft entry (not saved until user types)")
             return createDraftEntry()
         } else {
             if let todayEntry = entries.first(where: { entry in
@@ -109,7 +106,6 @@ class EntryListViewModel {
         draftEntry = newEntry
         selectedEntryId = newEntry.id
 
-        print("Draft entry created: \(newEntry.id)")
         return ""
     }
 
@@ -129,7 +125,7 @@ class EntryListViewModel {
             }
         } else {
             fileService.saveEntry(entry, content: content)
-            
+
             if content.count < 20 {
                 updatePreviewTextFromContent(for: entry, content: content)
             } else {
@@ -137,14 +133,23 @@ class EntryListViewModel {
             }
         }
     }
+
+    func saveEntryWithoutPreviewUpdate(entry: HumanEntry, content: String) {
+        if let draft = draftEntry, draft.id == entry.id {
+            if !content.isEmpty {
+                promoteDraftToSaved(entry: entry, content: content)
+            }
+        } else {
+            // Only save to disk, skip expensive preview updates during typing
+            fileService.saveEntry(entry, content: content)
+        }
+    }
     
     private func promoteDraftToSaved(entry: HumanEntry, content: String) {
         guard let draft = draftEntry, draft.id == entry.id else {
             return
         }
-        
-        print("Promoting draft to saved entry")
-        
+
         fileService.saveEntry(entry, content: content)
         entries.insert(entry, at: 0)
         groupedEntries = groupEntriesByDate(entries)
@@ -160,7 +165,6 @@ class EntryListViewModel {
     
     func deleteEntry(entry: HumanEntry) -> String? {
         if let draft = draftEntry, draft.id == entry.id {
-            print("Deleting unsaved draft entry")
             draftEntry = nil
             
             if let firstEntry = entries.first {

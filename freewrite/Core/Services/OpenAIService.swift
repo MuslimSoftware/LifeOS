@@ -32,50 +32,31 @@ enum OpenAIError: Error, LocalizedError {
 class OpenAIService: OCRServiceProtocol {
     private let apiKeyStorage: APIKeyStorageProtocol
     private let apiURL = "https://api.openai.com/v1/chat/completions"
-    private var cachedAPIKey: String?
-    
+
     init(apiKeyStorage: APIKeyStorageProtocol = KeychainService.shared) {
         self.apiKeyStorage = apiKeyStorage
     }
-    
+
     private func getAPIKey() throws -> String {
-        // Return cached key if available
-        if let cached = cachedAPIKey {
-            print("🔑 Using cached API key (no keychain access)")
-            return cached
-        }
-        
-        // Retrieve from keychain only once per session
+        // KeychainService now handles caching internally
         guard let key = apiKeyStorage.getAPIKey() else {
-            print("❌ No API key found in storage")
             throw OpenAIError.noAPIKey
         }
-        
-        print("🔑 Retrieved API key from keychain (length: \(key.count))")
-        
-        // Cache for future calls in this session
-        cachedAPIKey = key
+
         return key
-    }
-    
-    func clearKeyCache() {
-        cachedAPIKey = nil
-        print("🔑 API key cache cleared")
     }
     
     func extractText(from image: NSImage) async throws -> ExtractedContent {
         let apiKey = try getAPIKey()
-        
-        // Convert image to base64
+
         guard let imageData = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: imageData),
               let pngData = bitmap.representation(using: .png, properties: [:]) else {
             throw OpenAIError.imageConversionFailed
         }
-        
+
         let base64Image = pngData.base64EncodedString()
-        
-        // Create request payload
+
         let payload: [String: Any] = [
             "model": "gpt-4o",
             "messages": [
@@ -109,30 +90,26 @@ class OpenAIService: OCRServiceProtocol {
             "max_tokens": 4096,
             "response_format": ["type": "json_object"]
         ]
-        
-        // Create URL request
+
         guard let url = URL(string: apiURL) else {
             throw OpenAIError.networkError("Invalid URL")
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        
-        // Make request
+
         let (data, response) = try await URLSession.shared.data(for: request)
-        
-        // Check response status
+
         if let httpResponse = response as? HTTPURLResponse {
             guard httpResponse.statusCode == 200 else {
                 let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
                 throw OpenAIError.networkError("Status \(httpResponse.statusCode): \(errorMessage)")
             }
         }
-        
-        // Parse response
+
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
               let firstChoice = choices.first,
@@ -140,8 +117,7 @@ class OpenAIService: OCRServiceProtocol {
               let content = message["content"] as? String else {
             throw OpenAIError.noResponse
         }
-        
-        // Parse extracted content JSON
+
         print("📄 Response content preview: \(String(content.prefix(200)))...")
         
         guard let contentData = content.data(using: .utf8),

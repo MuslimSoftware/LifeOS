@@ -181,27 +181,24 @@ struct SettingsView: View {
             errorMessage = "Please enter an API key"
             return
         }
-        
-        // Validate API key format
+
         guard trimmedKey.hasPrefix("sk-") else {
             errorMessage = "Invalid API key format. OpenAI keys start with 'sk-'"
             return
         }
-        
+
         guard trimmedKey.count > 20 else {
             errorMessage = "API key appears too short. Please check and try again."
             return
         }
-        
+
         if KeychainService.shared.saveAPIKey(trimmedKey) {
             isKeyStored = true
             showSuccess = true
             apiKey = ""
-            
-            // Invalidate cache so new key is used
-            KeychainService.shared.invalidateCache()
-            
-            // Hide success message after 3 seconds
+
+            // Note: saveAPIKey() already caches the key, no need to invalidate
+
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 showSuccess = false
             }
@@ -215,8 +212,7 @@ struct SettingsView: View {
             isKeyStored = false
             showSuccess = false
             errorMessage = nil
-            
-            // Invalidate cache
+
             KeychainService.shared.invalidateCache()
         } else {
             errorMessage = "Failed to remove API key"

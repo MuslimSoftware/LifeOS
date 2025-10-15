@@ -22,14 +22,12 @@ class FileManagerService {
     
     func saveEntry(_ entry: HumanEntry, content: String) {
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
-        
-        print("Attempting to save file to: \(fileURL.path)")
-        
+
         let existingContent = try? String(contentsOf: fileURL, encoding: .utf8)
         let todoSection = existingContent != nil ? extractTODOSection(from: existingContent!) : ""
-        
+
         let metadata = "---\ndate: \(entry.date)\nyear: \(entry.year)\n---\n"
-        
+
         let contentWithMetadata: String
         if !todoSection.isEmpty {
             contentWithMetadata = """
@@ -40,30 +38,25 @@ class FileManagerService {
         } else {
             contentWithMetadata = """
             \(metadata)## TODOs
-            
+
             ## Journal
             \(content)
             """
         }
-        
+
         do {
             try contentWithMetadata.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("Successfully saved entry: \(entry.filename)")
         } catch {
             print("Error saving entry: \(error)")
-            print("Error details: \(error.localizedDescription)")
         }
     }
     
     func loadEntry(_ entry: HumanEntry) -> String? {
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
-        
-        print("Attempting to load file from: \(fileURL.path)")
-        
+
         do {
             if fileManager.fileExists(atPath: fileURL.path) {
                 let content = try String(contentsOf: fileURL, encoding: .utf8)
-                print("Successfully loaded entry: \(entry.filename)")
                 return extractJournalSection(from: content)
             } else {
                 print("File does not exist: \(entry.filename)")
@@ -71,7 +64,6 @@ class FileManagerService {
             }
         } catch {
             print("Error loading entry: \(error)")
-            print("Error details: \(error.localizedDescription)")
             return nil
         }
     }
@@ -120,22 +112,18 @@ class FileManagerService {
     }
     
     func loadExistingEntries() -> [HumanEntry] {
-        print("Looking for entries in: \(documentsDirectory.path)")
-        
+        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+
         do {
             let fileURLs = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
             let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
             
-            print("Found \(mdFiles.count) .md files")
-            
             let entriesWithDates = mdFiles.compactMap { fileURL -> (entry: HumanEntry, date: Date)? in
                 let filename = fileURL.lastPathComponent
-                print("Processing: \(filename)")
-                
+
                 guard let uuidMatch = filename.range(of: "\\[(.*?)\\]", options: .regularExpression),
                       let dateMatch = filename.range(of: "\\[(\\d{4}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2})\\]", options: .regularExpression),
                       let uuid = UUID(uuidString: String(filename[uuidMatch].dropFirst().dropLast())) else {
-                    print("Failed to extract UUID or date from filename: \(filename)")
                     return nil
                 }
                 
@@ -144,25 +132,22 @@ class FileManagerService {
                 dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
                 
                 guard let fileDate = dateFormatter.date(from: dateString) else {
-                    print("Failed to parse date from filename: \(filename)")
                     return nil
                 }
                 
                 do {
                     let content = try String(contentsOf: fileURL, encoding: .utf8)
-                    
-                    // Try to load date from metadata first
+
                     var displayDate: String
                     var year: Int
-                    
+
                     if let metadata = parseMetadata(from: content) {
                         displayDate = metadata.date
                         year = metadata.year
                     } else {
-                        // Fallback to filename parsing for old entries
                         dateFormatter.dateFormat = "MMM d"
                         displayDate = dateFormatter.string(from: fileDate)
-                        
+
                         let calendar = Calendar.current
                         year = calendar.component(.year, from: fileDate)
                     }
@@ -173,7 +158,6 @@ class FileManagerService {
                         .trimmingCharacters(in: .whitespacesAndNewlines)
 
                     guard !preview.isEmpty else {
-                        print("Skipping TODO-only entry: \(filename)")
                         return nil
                     }
 
@@ -195,38 +179,37 @@ class FileManagerService {
                 }
             }
             
-            // Sort by journal entry date (most recent first), not file creation date
-            return entriesWithDates
+            let sortedEntries = entriesWithDates
                 .sorted { entry1, entry2 in
-                    // Parse the display date + year to create sortable dates
                     let dateFormatter = DateFormatter()
                     dateFormatter.dateFormat = "MMM d"
                     dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-                    
+
                     guard let date1 = dateFormatter.date(from: entry1.entry.date),
                           let date2 = dateFormatter.date(from: entry2.entry.date) else {
-                        // Fallback to file date if parsing fails
                         return entry1.date > entry2.date
                     }
-                    
+
                     var components1 = Calendar.current.dateComponents([.month, .day], from: date1)
                     components1.year = entry1.entry.year
                     components1.hour = 12
-                    
+
                     var components2 = Calendar.current.dateComponents([.month, .day], from: date2)
                     components2.year = entry2.entry.year
                     components2.hour = 12
-                    
+
                     guard let fullDate1 = Calendar.current.date(from: components1),
                           let fullDate2 = Calendar.current.date(from: components2) else {
                         return entry1.date > entry2.date
                     }
-                    
-                    // Sort most recent first
+
                     return fullDate1 > fullDate2
                 }
                 .map { $0.entry }
-            
+
+            print("[\(timestamp)] Loaded \(sortedEntries.count) entries")
+            return sortedEntries
+
         } catch {
             print("Error loading directory contents: \(error)")
             return []
@@ -236,7 +219,6 @@ class FileManagerService {
     func deleteEntry(_ entry: HumanEntry) throws {
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
         try fileManager.removeItem(at: fileURL)
-        print("Successfully deleted file: \(entry.filename)")
     }
     
     func getPreviewText(for entry: HumanEntry) -> String {
@@ -368,7 +350,6 @@ class FileManagerService {
 
                 var dueTime: Date?
 
-                // Parse time in format @H:MM AM/PM or @HH:MM AM/PM
                 let timePattern = #"@(\d{1,2}):(\d{2})\s*(AM|PM)"#
                 if let regex = try? NSRegularExpression(pattern: timePattern, options: .caseInsensitive),
                    let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) {
@@ -379,7 +360,6 @@ class FileManagerService {
                     let periodStr = nsString.substring(with: match.range(at: 3)).uppercased()
 
                     if var hour = Int(hourStr), let minute = Int(minuteStr) {
-                        // Convert to 24-hour format
                         if periodStr == "PM" && hour != 12 {
                             hour += 12
                         } else if periodStr == "AM" && hour == 12 {
@@ -392,7 +372,6 @@ class FileManagerService {
                         dueTime = Calendar.current.date(from: components)
                     }
 
-                    // Remove time from text
                     text = nsString.replacingCharacters(in: match.range, with: "").trimmingCharacters(in: .whitespaces)
                 }
 
@@ -420,7 +399,6 @@ class FileManagerService {
                 let hour = calendar.component(.hour, from: dueTime)
                 let minute = calendar.component(.minute, from: dueTime)
 
-                // Convert to 12-hour format
                 let period = hour >= 12 ? "PM" : "AM"
                 let displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour)
 
@@ -429,19 +407,18 @@ class FileManagerService {
 
             return line
         }.joined(separator: "\n")
-        
+
         let metadata = "---\ndate: \(entry.date)\nyear: \(entry.year)\n---\n"
         let newContent = """
         \(metadata)## TODOs
         \(todoLines)
-        
+
         ## Journal
         \(journalSection)
         """
-        
+
         do {
             try newContent.write(to: fileURL, atomically: true, encoding: .utf8)
-            print("Successfully saved TODOs for: \(entry.filename)")
         } catch {
             print("Error saving TODOs: \(error)")
         }

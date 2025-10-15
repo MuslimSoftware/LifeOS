@@ -3,13 +3,14 @@ import AppKit
 
 struct ContentView: View {
     @Environment(AppSettings.self) private var settings
-    
+
     @State private var fileService = FileManagerService()
     @State private var pdfService = PDFExportService()
     @State private var editorViewModel: EditorViewModel?
     @State private var entryListViewModel: EntryListViewModel?
     @State private var selectedRoute: NavigationRoute = .home
-    
+    @State private var saveTask: Task<Void, Never>?
+
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     var body: some View {
@@ -35,10 +36,28 @@ struct ContentView: View {
                             editorVM.isFullscreen = false
                         }
                         .onChange(of: editorVM.text) {
-                            if let currentId = entryListVM.selectedEntryId {
-                                let currentEntry = entryListVM.entries.first(where: { $0.id == currentId }) ?? entryListVM.draftEntry
-                                if let currentEntry = currentEntry {
-                                    entryListVM.saveEntry(entry: currentEntry, content: editorVM.text)
+                            saveTask?.cancel()
+
+                            saveTask = Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(500))
+
+                                guard !Task.isCancelled else { return }
+
+                                if let currentId = entryListVM.selectedEntryId {
+                                    let currentEntry = entryListVM.entries.first(where: { $0.id == currentId }) ?? entryListVM.draftEntry
+                                    if let currentEntry = currentEntry {
+                                        entryListVM.saveEntryWithoutPreviewUpdate(entry: currentEntry, content: editorVM.text)
+                                    }
+                                }
+                            }
+                        }
+                        .onChange(of: entryListVM.selectedEntryId) { oldId, newId in
+                            saveTask?.cancel()
+
+                            if let oldId = oldId {
+                                let oldEntry = entryListVM.entries.first(where: { $0.id == oldId }) ?? entryListVM.draftEntry
+                                if let oldEntry = oldEntry {
+                                    entryListVM.saveEntry(entry: oldEntry, content: editorVM.text)
                                 }
                             }
                         }

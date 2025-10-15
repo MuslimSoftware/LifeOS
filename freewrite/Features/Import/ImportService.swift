@@ -31,30 +31,28 @@ class ImportService {
         var errors: [Error] = []
         
         for (index, url) in urls.enumerated() {
-            // Check for cancellation
             if Task.isCancelled {
                 await onProgress?(.cancelled(processed: index, total: urls.count))
                 break
             }
-            
+
             let current = index + 1
             let filename = url.lastPathComponent
             await onProgress?(.processing(current: current, total: urls.count, filename: filename))
-            
+
             let gotAccess = url.startAccessingSecurityScopedResource()
             defer {
                 if gotAccess {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
-            
+
             do {
                 let fileExtension = url.pathExtension.lowercased()
-                
+
                 if fileExtension == "pdf" {
                     let entries = try await processPDFFile(url)
                     results.append(contentsOf: entries)
-                    // Report completion for each PDF entry
                     for entry in entries {
                         await onProgress?(.completed(entry: entry, current: current, total: urls.count))
                     }
@@ -70,10 +68,9 @@ class ImportService {
                 await onProgress?(.failed(error: error, filename: filename, current: current, total: urls.count))
             }
         }
-        
+
         await onProgress?(.finished(successful: results.count, failed: errors.count))
-        
-        // If all files failed, throw the first error
+
         if results.isEmpty && !errors.isEmpty {
             throw errors.first!
         }
@@ -96,8 +93,7 @@ class ImportService {
         guard !extracted.text.isEmpty else {
             throw ImportError.noTextFound
         }
-        
-        // Parse date from extracted.date or fall back to file date
+
         let detectedDate: Date
         if let dateString = extracted.date,
            let date = parseISODate(dateString) ?? detectDate(in: dateString) {
@@ -172,8 +168,7 @@ class ImportService {
                 pageErrors.append(error)
             }
         }
-        
-        // If no pages were successfully processed, throw error
+
         if entries.isEmpty {
             throw pageErrors.first ?? ImportError.noTextFound
         }
