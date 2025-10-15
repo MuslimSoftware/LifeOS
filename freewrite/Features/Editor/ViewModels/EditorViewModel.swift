@@ -6,11 +6,12 @@ import AppKit
 class EditorViewModel {
     var text: String = ""
     var placeholderText: String = ""
-    
+    var isLoadingContent: Bool = false
+
     var timeRemaining: Int = AppConstants.defaultTimerDuration
     var timerIsRunning = false
     var lastClickTime: Date? = nil
-    
+
     var isFullscreen = false
     var bottomNavOpacity: Double = 1.0
     var isHoveringBottomNav = false

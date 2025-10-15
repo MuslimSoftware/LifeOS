@@ -55,7 +55,9 @@ struct UtilityButtonsView: View {
                 }
                 
                 let newText = entryListViewModel.createDraftEntry()
+                editorViewModel.isLoadingContent = true
                 editorViewModel.text = newText
+                editorViewModel.isLoadingContent = false
                 editorViewModel.randomizePlaceholder()
             }) {
                 Text("New Entry")

@@ -86,13 +86,17 @@ struct EntryListView: View {
                                                                 
                                                                 vm.selectedEntryId = entry.id
                                                                 if let content = vm.loadEntry(entry: entry) {
+                                                                    editorViewModel.isLoadingContent = true
                                                                     editorViewModel.text = content
+                                                                    editorViewModel.isLoadingContent = false
                                                                 }
                                                             }
                                                         },
                                                         onDelete: {
                                                             if let newText = vm.deleteEntry(entry: entry) {
+                                                                editorViewModel.isLoadingContent = true
                                                                 editorViewModel.text = newText
+                                                                editorViewModel.isLoadingContent = false
                                                             }
                                                         },
                                                         onExport: {

@@ -343,7 +343,9 @@ struct CalendarView: View {
         entryListViewModel.expandSectionsForEntry(entry)
         entryListViewModel.selectedEntryId = entry.id
         if let content = entryListViewModel.loadEntry(entry: entry) {
+            editorViewModel.isLoadingContent = true
             editorViewModel.text = content
+            editorViewModel.isLoadingContent = false
         }
         selectedRoute = .journal
     }
@@ -372,11 +374,13 @@ struct CalendarView: View {
                 entryListViewModel.expandSectionsForEntry(entry)
                 entryListViewModel.selectedEntryId = entry.id
 
+                editorViewModel.isLoadingContent = true
                 if let content = entryListViewModel.loadEntry(entry: entry) {
                     editorViewModel.text = content
                 } else {
                     editorViewModel.text = ""
                 }
+                editorViewModel.isLoadingContent = false
 
                 selectedRoute = .journal
             }
@@ -388,7 +392,9 @@ struct CalendarView: View {
             entryListViewModel.expandSectionsForEntry(newEntry)
             entryListViewModel.selectedEntryId = newEntry.id
 
+            editorViewModel.isLoadingContent = true
             editorViewModel.text = ""
+            editorViewModel.isLoadingContent = false
             selectedRoute = .journal
         }
     }

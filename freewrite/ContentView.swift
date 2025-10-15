@@ -36,6 +36,8 @@ struct ContentView: View {
                             editorVM.isFullscreen = false
                         }
                         .onChange(of: editorVM.text) {
+                            guard !editorVM.isLoadingContent else { return }
+
                             saveTask?.cancel()
 
                             saveTask = Task { @MainActor in
@@ -53,13 +55,6 @@ struct ContentView: View {
                         }
                         .onChange(of: entryListVM.selectedEntryId) { oldId, newId in
                             saveTask?.cancel()
-
-                            if let oldId = oldId {
-                                let oldEntry = entryListVM.entries.first(where: { $0.id == oldId }) ?? entryListVM.draftEntry
-                                if let oldEntry = oldEntry {
-                                    entryListVM.saveEntry(entry: oldEntry, content: editorVM.text)
-                                }
-                            }
                         }
                 }
             } else {
@@ -94,6 +89,7 @@ struct ContentView: View {
         let editorVM = EditorViewModel(fileService: fileService, settings: settings)
         let entryListVM = EntryListViewModel(fileService: fileService)
 
+        editorVM.isLoadingContent = true
         if let initialText = entryListVM.loadExistingEntries() {
             editorVM.text = initialText
         } else if let selectedId = entryListVM.selectedEntryId,
@@ -101,6 +97,7 @@ struct ContentView: View {
                   let content = entryListVM.loadEntry(entry: selectedEntry) {
             editorVM.text = content
         }
+        editorVM.isLoadingContent = false
 
         self.editorViewModel = editorVM
         self.entryListViewModel = entryListVM
