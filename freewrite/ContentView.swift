@@ -89,9 +89,11 @@ struct ContentView: View {
     }
     
     private func initializeViewModels() {
+        fileService.migrateToEncryption()
+
         let editorVM = EditorViewModel(fileService: fileService, settings: settings)
         let entryListVM = EntryListViewModel(fileService: fileService)
-        
+
         if let initialText = entryListVM.loadExistingEntries() {
             editorVM.text = initialText
         } else if let selectedId = entryListVM.selectedEntryId,
@@ -99,7 +101,7 @@ struct ContentView: View {
                   let content = entryListVM.loadEntry(entry: selectedEntry) {
             editorVM.text = content
         }
-        
+
         self.editorViewModel = editorVM
         self.entryListViewModel = entryListVM
     }

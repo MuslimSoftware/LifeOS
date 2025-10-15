@@ -23,7 +23,7 @@ class FileManagerService {
     func saveEntry(_ entry: HumanEntry, content: String) {
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
 
-        let existingContent = try? String(contentsOf: fileURL, encoding: .utf8)
+        let existingContent = loadRawContent(from: fileURL)
         let todoSection = existingContent != nil ? extractTODOSection(from: existingContent!) : ""
 
         let metadata = "---\ndate: \(entry.date)\nyear: \(entry.year)\n---\n"
@@ -44,8 +44,18 @@ class FileManagerService {
             """
         }
 
+        guard let encryptionKey = KeychainService.shared.getOrCreateEncryptionKey() else {
+            print("Error: Could not get encryption key")
+            return
+        }
+
+        guard let encryptedData = EncryptionService.shared.encrypt(contentWithMetadata, with: encryptionKey) else {
+            print("Error: Could not encrypt content")
+            return
+        }
+
         do {
-            try contentWithMetadata.write(to: fileURL, atomically: true, encoding: .utf8)
+            try encryptedData.write(to: fileURL, options: .atomic)
         } catch {
             print("Error saving entry: \(error)")
         }
@@ -54,16 +64,36 @@ class FileManagerService {
     func loadEntry(_ entry: HumanEntry) -> String? {
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
 
+        guard let content = loadRawContent(from: fileURL) else {
+            print("Error loading entry: \(entry.filename)")
+            return nil
+        }
+
+        return extractJournalSection(from: content)
+    }
+
+    private func loadRawContent(from fileURL: URL) -> String? {
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            return nil
+        }
+
         do {
-            if fileManager.fileExists(atPath: fileURL.path) {
-                let content = try String(contentsOf: fileURL, encoding: .utf8)
-                return extractJournalSection(from: content)
-            } else {
-                print("File does not exist: \(entry.filename)")
-                return nil
+            let data = try Data(contentsOf: fileURL)
+
+            if let encryptionKey = KeychainService.shared.getOrCreateEncryptionKey(),
+               let decryptedContent = EncryptionService.shared.decrypt(data, with: encryptionKey) {
+                return decryptedContent
             }
+
+            if let plaintext = String(data: data, encoding: .utf8) {
+                print("Warning: Loaded unencrypted file (legacy format): \(fileURL.lastPathComponent)")
+                return plaintext
+            }
+
+            print("Error: Could not decrypt or read file as plaintext")
+            return nil
         } catch {
-            print("Error loading entry: \(error)")
+            print("Error loading file: \(error)")
             return nil
         }
     }
@@ -134,49 +164,47 @@ class FileManagerService {
                 guard let fileDate = dateFormatter.date(from: dateString) else {
                     return nil
                 }
-                
-                do {
-                    let content = try String(contentsOf: fileURL, encoding: .utf8)
 
-                    var displayDate: String
-                    var year: Int
-
-                    if let metadata = parseMetadata(from: content) {
-                        displayDate = metadata.date
-                        year = metadata.year
-                    } else {
-                        dateFormatter.dateFormat = "MMM d"
-                        displayDate = dateFormatter.string(from: fileDate)
-
-                        let calendar = Calendar.current
-                        year = calendar.component(.year, from: fileDate)
-                    }
-                    
-                    let journalContent = extractJournalSection(from: content)
-                    let preview = journalContent
-                        .replacingOccurrences(of: "\n", with: " ")
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-
-                    guard !preview.isEmpty else {
-                        return nil
-                    }
-
-                    let truncated = preview.count > 100 ? String(preview.prefix(100)) + "..." : preview
-
-                    return (
-                        entry: HumanEntry(
-                            id: uuid,
-                            date: displayDate,
-                            filename: filename,
-                            previewText: truncated,
-                            year: year
-                        ),
-                        date: fileDate
-                    )
-                } catch {
-                    print("Error reading file: \(error)")
+                guard let content = loadRawContent(from: fileURL) else {
+                    print("Error reading file: \(filename)")
                     return nil
                 }
+
+                var displayDate: String
+                var year: Int
+
+                if let metadata = parseMetadata(from: content) {
+                    displayDate = metadata.date
+                    year = metadata.year
+                } else {
+                    dateFormatter.dateFormat = "MMM d"
+                    displayDate = dateFormatter.string(from: fileDate)
+
+                    let calendar = Calendar.current
+                    year = calendar.component(.year, from: fileDate)
+                }
+
+                let journalContent = extractJournalSection(from: content)
+                let preview = journalContent
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                guard !preview.isEmpty else {
+                    return nil
+                }
+
+                let truncated = preview.count > 100 ? String(preview.prefix(100)) + "..." : preview
+
+                return (
+                    entry: HumanEntry(
+                        id: uuid,
+                        date: displayDate,
+                        filename: filename,
+                        previewText: truncated,
+                        year: year
+                    ),
+                    date: fileDate
+                )
             }
             
             let sortedEntries = entriesWithDates
@@ -223,18 +251,17 @@ class FileManagerService {
     
     func getPreviewText(for entry: HumanEntry) -> String {
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
-        
-        do {
-            let content = try String(contentsOf: fileURL, encoding: .utf8)
-            let journalContent = extractJournalSection(from: content)
-            let preview = journalContent
-                .replacingOccurrences(of: "\n", with: " ")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
-        } catch {
-            print("Error updating preview text: \(error)")
+
+        guard let content = loadRawContent(from: fileURL) else {
+            print("Error updating preview text")
             return ""
         }
+
+        let journalContent = extractJournalSection(from: content)
+        let preview = journalContent
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
     }
     
     func entryContainsWelcomeMessage(_ entry: HumanEntry) -> Bool {
@@ -275,8 +302,7 @@ class FileManagerService {
     func loadTODOs(for entry: HumanEntry) -> [TODOItem] {
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
 
-        guard fileManager.fileExists(atPath: fileURL.path),
-              let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
+        guard let content = loadRawContent(from: fileURL) else {
             return []
         }
 
@@ -295,7 +321,10 @@ class FileManagerService {
             let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
 
             for fileURL in mdFiles {
-                let content = try String(contentsOf: fileURL, encoding: .utf8)
+                guard let content = loadRawContent(from: fileURL) else {
+                    continue
+                }
+
                 if let metadata = parseMetadata(from: content),
                    metadata.date == dateString && metadata.year == year {
                     let todoSection = extractTODOSection(from: content)
@@ -320,7 +349,10 @@ class FileManagerService {
             let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
 
             for fileURL in mdFiles {
-                let content = try String(contentsOf: fileURL, encoding: .utf8)
+                guard let content = loadRawContent(from: fileURL) else {
+                    continue
+                }
+
                 if let metadata = parseMetadata(from: content),
                    metadata.date == dateString && metadata.year == year {
                     return fileURL.lastPathComponent
@@ -384,10 +416,56 @@ class FileManagerService {
         return todos
     }
     
+    func migrateToEncryption() {
+        print("Starting encryption migration...")
+
+        guard let encryptionKey = KeychainService.shared.getOrCreateEncryptionKey() else {
+            print("Error: Could not get encryption key for migration")
+            return
+        }
+
+        do {
+            let fileURLs = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
+            let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
+
+            var migratedCount = 0
+            var skippedCount = 0
+            var errorCount = 0
+
+            for fileURL in mdFiles {
+                let data = try Data(contentsOf: fileURL)
+
+                if EncryptionService.shared.decrypt(data, with: encryptionKey) != nil {
+                    skippedCount += 1
+                    continue
+                }
+
+                guard let plaintext = String(data: data, encoding: .utf8) else {
+                    print("Error: Could not read file as plaintext: \(fileURL.lastPathComponent)")
+                    errorCount += 1
+                    continue
+                }
+
+                guard let encryptedData = EncryptionService.shared.encrypt(plaintext, with: encryptionKey) else {
+                    print("Error: Could not encrypt file: \(fileURL.lastPathComponent)")
+                    errorCount += 1
+                    continue
+                }
+
+                try encryptedData.write(to: fileURL, options: .atomic)
+                migratedCount += 1
+            }
+
+            print("Migration complete: \(migratedCount) files encrypted, \(skippedCount) already encrypted, \(errorCount) errors")
+        } catch {
+            print("Error during migration: \(error)")
+        }
+    }
+
     func saveTODOs(_ todos: [TODOItem], for entry: HumanEntry) {
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
 
-        let existingContent = try? String(contentsOf: fileURL, encoding: .utf8)
+        let existingContent = loadRawContent(from: fileURL)
         let journalSection = existingContent != nil ? extractJournalSection(from: existingContent!) : ""
 
         let todoLines = todos.map { todo in
@@ -417,8 +495,18 @@ class FileManagerService {
         \(journalSection)
         """
 
+        guard let encryptionKey = KeychainService.shared.getOrCreateEncryptionKey() else {
+            print("Error: Could not get encryption key")
+            return
+        }
+
+        guard let encryptedData = EncryptionService.shared.encrypt(newContent, with: encryptionKey) else {
+            print("Error: Could not encrypt content")
+            return
+        }
+
         do {
-            try newContent.write(to: fileURL, atomically: true, encoding: .utf8)
+            try encryptedData.write(to: fileURL, options: .atomic)
         } catch {
             print("Error saving TODOs: \(error)")
         }
