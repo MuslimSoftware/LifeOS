@@ -1,9 +1,8 @@
 import SwiftUI
 
 enum NavigationRoute: String, CaseIterable {
-    case home = "Home"
-    case journal = "Journal"
     case calendar = "Calendar"
+    case journal = "Journal"
 }
 
 struct SidebarView: View {

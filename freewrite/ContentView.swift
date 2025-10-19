@@ -8,7 +8,7 @@ struct ContentView: View {
     @State private var pdfService = PDFExportService()
     @State private var editorViewModel: EditorViewModel?
     @State private var entryListViewModel: EntryListViewModel?
-    @State private var selectedRoute: NavigationRoute = .home
+    @State private var selectedRoute: NavigationRoute = .calendar
     @State private var saveTask: Task<Void, Never>?
 
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -71,15 +71,13 @@ struct ContentView: View {
     @ViewBuilder
     private var mainContent: some View {
         switch selectedRoute {
-        case .home:
-            HomeView()
+        case .calendar:
+            CalendarView(selectedRoute: $selectedRoute)
         case .journal:
             JournalPageView(
                 pdfService: pdfService,
                 fileService: fileService
             )
-        case .calendar:
-            CalendarView(selectedRoute: $selectedRoute)
         }
     }
     
