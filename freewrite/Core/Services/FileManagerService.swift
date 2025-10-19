@@ -462,6 +462,71 @@ class FileManagerService {
         }
     }
 
+    func exportAllEntriesPlaintext(to destinationURL: URL) -> Bool {
+        guard let encryptionKey = KeychainService.shared.getOrCreateEncryptionKey() else {
+            print("Error: Could not get encryption key for export")
+            return false
+        }
+
+        do {
+            let fileURLs = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
+            let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
+
+            let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try fileManager.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+
+            var exportedCount = 0
+
+            for fileURL in mdFiles {
+                guard let content = loadRawContent(from: fileURL) else {
+                    print("Warning: Could not decrypt file: \(fileURL.lastPathComponent)")
+                    continue
+                }
+
+                let exportURL = tempDirectory.appendingPathComponent(fileURL.lastPathComponent)
+                try content.write(to: exportURL, atomically: true, encoding: .utf8)
+                exportedCount += 1
+            }
+
+            let tempZipURL = FileManager.default.temporaryDirectory.appendingPathComponent("export.zip")
+            if fileManager.fileExists(atPath: tempZipURL.path) {
+                try fileManager.removeItem(at: tempZipURL)
+            }
+
+            try createZip(from: tempDirectory, to: tempZipURL)
+
+            try fileManager.moveItem(at: tempZipURL, to: destinationURL)
+
+            try fileManager.removeItem(at: tempDirectory)
+
+            print("Successfully exported \(exportedCount) entries to: \(destinationURL.path)")
+            return true
+        } catch {
+            print("Error exporting entries: \(error)")
+            return false
+        }
+    }
+
+    private func createZip(from sourceDirectory: URL, to destinationURL: URL) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        process.currentDirectoryURL = sourceDirectory
+        process.arguments = ["-r", "-j", destinationURL.path, "."]
+
+        let pipe = Pipe()
+        process.standardError = pipe
+
+        try process.run()
+        process.waitUntilExit()
+
+        if process.terminationStatus != 0 {
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let errorOutput = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("Zip error output: \(errorOutput)")
+            throw NSError(domain: "FileManagerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Zip creation failed: \(errorOutput)"])
+        }
+    }
+
     func saveTODOs(_ todos: [TODOItem], for entry: HumanEntry) {
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
 

@@ -181,4 +181,28 @@ class KeychainService: APIKeyStorageProtocol {
 
         return status == errSecSuccess
     }
+
+    func exportEncryptionKey() -> String? {
+        guard let key = getOrCreateEncryptionKey() else {
+            return nil
+        }
+
+        let keyData = EncryptionService.shared.keyToData(key)
+        return keyData.base64EncodedString()
+    }
+
+    func importEncryptionKey(base64String: String) -> Bool {
+        guard let keyData = Data(base64Encoded: base64String) else {
+            print("Error: Invalid base64 string")
+            return false
+        }
+
+        guard keyData.count == 32 else {
+            print("Error: Invalid key size (expected 32 bytes)")
+            return false
+        }
+
+        let key = EncryptionService.shared.dataToKey(keyData)
+        return saveEncryptionKey(key)
+    }
 }
