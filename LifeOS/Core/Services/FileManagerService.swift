@@ -6,17 +6,17 @@ class FileManagerService {
     private let fileManager = FileManager.default
     
     let documentsDirectory: URL = {
-        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Freewrite")
-        
+        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("LifeOS")
+
         if !FileManager.default.fileExists(atPath: directory.path) {
             do {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                print("Successfully created Freewrite directory")
+                print("Successfully created LifeOS directory")
             } catch {
                 print("Error creating directory: \(error)")
             }
         }
-        
+
         return directory
     }()
     
@@ -266,7 +266,7 @@ class FileManagerService {
     
     func entryContainsWelcomeMessage(_ entry: HumanEntry) -> Bool {
         guard let content = loadEntry(entry) else { return false }
-        return content.contains("Welcome to Freewrite.")
+        return content.contains("Welcome to LifeOS.")
     }
     
     private func extractTODOSection(from content: String) -> String {

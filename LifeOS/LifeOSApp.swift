@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct freewriteApp: App {
+struct LifeOSApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var settings = AppSettings()
     

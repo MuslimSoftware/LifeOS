@@ -415,7 +415,7 @@ struct SettingsView: View {
         let savePanel = NSSavePanel()
         savePanel.title = "Export Encryption Key"
         savePanel.message = "Save your encryption key to a secure location"
-        savePanel.nameFieldStringValue = "freewrite-encryption-key.txt"
+        savePanel.nameFieldStringValue = "lifeos-encryption-key.txt"
         savePanel.canCreateDirectories = true
 
         savePanel.begin { response in
@@ -440,7 +440,7 @@ struct SettingsView: View {
         let savePanel = NSSavePanel()
         savePanel.title = "Export All Entries (Plaintext)"
         savePanel.message = "Choose where to save the decrypted entries"
-        savePanel.nameFieldStringValue = "freewrite-export-\(Int(Date().timeIntervalSince1970)).zip"
+        savePanel.nameFieldStringValue = "lifeos-export-\(Int(Date().timeIntervalSince1970)).zip"
         savePanel.allowedContentTypes = [.zip]
         savePanel.canCreateDirectories = true
 

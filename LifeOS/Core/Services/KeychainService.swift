@@ -5,7 +5,7 @@ import CryptoKit
 class KeychainService: APIKeyStorageProtocol {
     static let shared = KeychainService()
 
-    private let service = "com.lifeos.freewrite"
+    private let service = "com.lifeos.app"
     private let account = "openai-api-key"
     private let encryptionKeyAccount = "file-encryption-key"
     private var cachedKey: String?
