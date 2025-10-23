@@ -26,6 +26,7 @@ struct SettingsView: View {
     @State private var dbSize: String = "0"
     @State private var lastProcessedDate: Date?
     @State private var showClearConfirmation: Bool = false
+    @State private var autoProcessingEnabled: Bool = false
 
     private let fileService = FileManagerService()
 
@@ -506,6 +507,30 @@ struct SettingsView: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
+                // Auto-processing toggle
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Auto-Process New Entries")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(theme.primaryText)
+
+                        Text("Automatically analyze entries when saved")
+                            .font(.system(size: 11))
+                            .foregroundColor(theme.secondaryText)
+                    }
+
+                    Spacer()
+
+                    Toggle("", isOn: $autoProcessingEnabled)
+                        .labelsHidden()
+                        .onChange(of: autoProcessingEnabled) { _, newValue in
+                            AnalyticsObserver.shared.isAutoProcessingEnabled = newValue
+                        }
+                }
+                .padding(12)
+                .background(theme.hoveredBackground)
+                .cornerRadius(8)
+
                 Button("Process All Entries") {
                     showProcessingSheet = true
                 }
@@ -639,6 +664,9 @@ struct SettingsView: View {
 
     private func loadAnalyticsStats() {
         totalEntries = fileService.loadExistingEntries().count
+
+        // Load auto-processing preference
+        autoProcessingEnabled = AnalyticsObserver.shared.isAutoProcessingEnabled
 
         do {
             let dbService = DatabaseService.shared
