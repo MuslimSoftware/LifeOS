@@ -31,7 +31,8 @@ enum OpenAIError: Error, LocalizedError {
 
 class OpenAIService: OCRServiceProtocol {
     private let apiKeyStorage: APIKeyStorageProtocol
-    private let apiURL = "https://api.openai.com/v1/chat/completions"
+    private let chatCompletionsURL = "https://api.openai.com/v1/chat/completions"
+    private let embeddingsURL = "https://api.openai.com/v1/embeddings"
 
     init(apiKeyStorage: APIKeyStorageProtocol = KeychainService.shared) {
         self.apiKeyStorage = apiKeyStorage
@@ -91,7 +92,7 @@ class OpenAIService: OCRServiceProtocol {
             "response_format": ["type": "json_object"]
         ]
 
-        guard let url = URL(string: apiURL) else {
+        guard let url = URL(string: chatCompletionsURL) else {
             throw OpenAIError.networkError("Invalid URL")
         }
 
@@ -129,4 +130,242 @@ class OpenAIService: OCRServiceProtocol {
         print("✅ Successfully extracted \(extracted.text.count) characters")
         return extracted
     }
+
+    // MARK: - Embeddings
+
+    /// Generate embedding vector for text using OpenAI embeddings API
+    /// - Parameter text: The text to embed
+    /// - Returns: Float array representing the embedding vector (3072 dimensions for text-embedding-3-large)
+    func generateEmbedding(for text: String) async throws -> [Float] {
+        let apiKey = try getAPIKey()
+
+        let payload: [String: Any] = [
+            "model": "text-embedding-3-large",
+            "input": text,
+            "encoding_format": "float"
+        ]
+
+        guard let url = URL(string: embeddingsURL) else {
+            throw OpenAIError.networkError("Invalid URL")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        if let httpResponse = response as? HTTPURLResponse {
+            guard httpResponse.statusCode == 200 else {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                throw OpenAIError.networkError("Status \(httpResponse.statusCode): \(errorMessage)")
+            }
+        }
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let dataArray = json["data"] as? [[String: Any]],
+              let firstItem = dataArray.first,
+              let embedding = firstItem["embedding"] as? [Double] else {
+            throw OpenAIError.invalidResponse
+        }
+
+        // Convert Double to Float for storage efficiency
+        return embedding.map { Float($0) }
+    }
+
+    /// Generate embeddings for multiple texts in batch
+    /// - Parameter texts: Array of texts to embed
+    /// - Returns: Array of embedding vectors
+    func generateEmbeddings(for texts: [String]) async throws -> [[Float]] {
+        guard !texts.isEmpty else { return [] }
+
+        let apiKey = try getAPIKey()
+
+        let payload: [String: Any] = [
+            "model": "text-embedding-3-large",
+            "input": texts,
+            "encoding_format": "float"
+        ]
+
+        guard let url = URL(string: embeddingsURL) else {
+            throw OpenAIError.networkError("Invalid URL")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        if let httpResponse = response as? HTTPURLResponse {
+            guard httpResponse.statusCode == 200 else {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                throw OpenAIError.networkError("Status \(httpResponse.statusCode): \(errorMessage)")
+            }
+        }
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let dataArray = json["data"] as? [[String: Any]] else {
+            throw OpenAIError.invalidResponse
+        }
+
+        return try dataArray.map { item in
+            guard let embedding = item["embedding"] as? [Double] else {
+                throw OpenAIError.invalidResponse
+            }
+            return embedding.map { Float($0) }
+        }
+    }
+
+    // MARK: - Structured Outputs (Chat Completions)
+
+    /// Send a chat completion request with structured output
+    /// - Parameters:
+    ///   - messages: Array of chat messages
+    ///   - schema: JSON schema for structured output
+    ///   - model: OpenAI model to use (default: gpt-4o-mini)
+    /// - Returns: Decoded response matching the schema type
+    func chatCompletion<T: Decodable>(
+        messages: [[String: Any]],
+        schema: [String: Any],
+        model: String = "gpt-4o-mini"
+    ) async throws -> T {
+        let apiKey = try getAPIKey()
+
+        let payload: [String: Any] = [
+            "model": model,
+            "messages": messages,
+            "response_format": [
+                "type": "json_schema",
+                "json_schema": schema
+            ]
+        ]
+
+        guard let url = URL(string: chatCompletionsURL) else {
+            throw OpenAIError.networkError("Invalid URL")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        if let httpResponse = response as? HTTPURLResponse {
+            guard httpResponse.statusCode == 200 else {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                throw OpenAIError.networkError("Status \(httpResponse.statusCode): \(errorMessage)")
+            }
+        }
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = json["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw OpenAIError.noResponse
+        }
+
+        guard let contentData = content.data(using: .utf8) else {
+            throw OpenAIError.invalidResponse
+        }
+
+        return try JSONDecoder().decode(T.self, from: contentData)
+    }
+
+    /// Send a chat completion request with tool/function calling
+    /// - Parameters:
+    ///   - messages: Array of chat messages
+    ///   - tools: Array of tool definitions
+    ///   - model: OpenAI model to use
+    /// - Returns: Chat response with potential tool calls
+    func chatCompletionWithTools(
+        messages: [[String: Any]],
+        tools: [[String: Any]],
+        model: String = "gpt-4o"
+    ) async throws -> ChatResponse {
+        let apiKey = try getAPIKey()
+
+        let payload: [String: Any] = [
+            "model": model,
+            "messages": messages,
+            "tools": tools
+        ]
+
+        guard let url = URL(string: chatCompletionsURL) else {
+            throw OpenAIError.networkError("Invalid URL")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        if let httpResponse = response as? HTTPURLResponse {
+            guard httpResponse.statusCode == 200 else {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                throw OpenAIError.networkError("Status \(httpResponse.statusCode): \(errorMessage)")
+            }
+        }
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = json["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any] else {
+            throw OpenAIError.noResponse
+        }
+
+        // Parse tool calls if present
+        var toolCalls: [ToolCall] = []
+        if let toolCallsArray = message["tool_calls"] as? [[String: Any]] {
+            for toolCallDict in toolCallsArray {
+                if let id = toolCallDict["id"] as? String,
+                   let function = toolCallDict["function"] as? [String: Any],
+                   let name = function["name"] as? String,
+                   let argumentsString = function["arguments"] as? String,
+                   let argumentsData = argumentsString.data(using: .utf8),
+                   let arguments = try? JSONSerialization.jsonObject(with: argumentsData) as? [String: Any] {
+                    toolCalls.append(ToolCall(id: id, name: name, arguments: arguments))
+                }
+            }
+        }
+
+        let content = message["content"] as? String
+        let finishReason = firstChoice["finish_reason"] as? String
+
+        return ChatResponse(
+            content: content,
+            toolCalls: toolCalls.isEmpty ? nil : toolCalls,
+            finishReason: finishReason
+        )
+    }
+}
+
+// MARK: - Supporting Types
+
+/// Represents a chat response from OpenAI
+struct ChatResponse {
+    let content: String?
+    let toolCalls: [ToolCall]?
+    let finishReason: String?
+
+    var hasToolCalls: Bool {
+        toolCalls != nil && !toolCalls!.isEmpty
+    }
+}
+
+/// Represents a tool/function call from the model
+struct ToolCall {
+    let id: String
+    let name: String
+    let arguments: [String: Any]
 }
