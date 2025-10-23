@@ -14,13 +14,27 @@ Building a pure Swift journal analytics system with AI agent capabilities for Li
 
 **Phase 2: COMPLETE ✅** - Full analytics pipeline (chunking, analysis, summarization)
 
-**Next Up: Phase 3** - ReAct Agent System
+**Phase 3: COMPLETE ✅** - ReAct Agent System with 5 tools and conversational AI
 
-### To Continue Implementation
-1. **Review Phase 3 checklist below** (starts at line ~274)
-2. **Start with**: Agent tools and tool registry
-3. **Follow the order**: Tools → Tool Registry → Agent Kernel → Current State Analyzer
-4. **All files go in**: `LifeOS/Core/Services/Agent/`
+**Next Up: Phase 4** - UI Features (Analytics Dashboard, AI Chat Interface)
+
+### To Continue Implementation (Phase 4)
+
+**Recommended Order**:
+1. **AI Chat Interface** (HIGH priority) - 7 files in `LifeOS/Features/AIChat/`
+2. **Current State Dashboard** (HIGH priority) - 6 files in `LifeOS/Features/Insights/`
+3. **Settings Integration** (MEDIUM priority) - 2 files in `LifeOS/Features/Settings/`
+4. **Analytics Dashboard** (MEDIUM priority) - 10 files in `LifeOS/Features/Analytics/`
+
+**Start With AI Chat (Most Impact)**:
+1. Create `LifeOS/Features/AIChat/` directory structure
+2. Build `ChatMessage` model + `ConversationPersistenceService`
+3. Implement `AIChatViewModel` (connects to AgentKernel)
+4. Create `AIChatView` with message bubbles and input
+5. Add components: `MessageBubbleView`, `ChatInputView`, `TypingIndicatorView`, `ToolBadgeView`
+6. Add "AI Chat" to sidebar navigation
+
+**Total Phase 4 Files**: 25 SwiftUI views (detailed specs start at line ~874)
 
 ### Files Created So Far
 
@@ -39,6 +53,15 @@ Building a pure Swift journal analytics system with AI agent capabilities for Li
 - `SummarizationService.swift` - Monthly/yearly narrative generation
 - `AnalyticsPipelineService.swift` - Full pipeline orchestration
 - `MonthSummaryRepository.swift` + `YearSummaryRepository.swift` - Summary storage
+
+**Phase 3:**
+- `AgentTool.swift` - Base protocol for agent tools
+- 5 tool implementations: `SearchSemanticTool`, `GetMonthSummaryTool`, `GetYearSummaryTool`, `GetTimeSeriesTool`, `GetCurrentStateSnapshotTool`
+- `ToolRegistry.swift` - Central tool management and execution
+- `AgentKernel.swift` - ReAct loop implementation (Reasoning + Acting)
+- `AgentMessage.swift` + `AgentResponse.swift` - Conversation models
+- `CurrentStateAnalyzer.swift` - AI-powered current life state analysis
+- 4 new models: `Trend`, `MoodState`, `AISuggestedTodo`, `CurrentState`
 
 ### Key Decisions Made
 - Using GRDB for SQLite (added to project)
@@ -346,7 +369,7 @@ Building a pure Swift journal analytics system with AI agent capabilities for Li
 
 ---
 
-## Phase 3: ReAct Agent System ⏳
+## Phase 3: ReAct Agent System ✅
 
 **Goal**: Build a conversational AI agent that can answer questions about your life using the analytics data as tools.
 
@@ -364,23 +387,23 @@ Building a pure Swift journal analytics system with AI agent capabilities for Li
 - ✅ `JournalChunk` - Text chunks with embeddings
 - ✅ `TimeSeriesDataPoint` - Time series data
 
-**What Phase 3 Adds:**
-- 🆕 Agent tools that wrap existing services
-- 🆕 Tool registry and orchestration
-- 🆕 ReAct loop for reasoning + acting
-- 🆕 Current state analysis
-- 🆕 Conversational interface
+**What Phase 3 Added:**
+- ✅ Agent tools that wrap existing services
+- ✅ Tool registry and orchestration
+- ✅ ReAct loop for reasoning + acting
+- ✅ Current state analysis
+- ✅ Conversational interface
 
 ### 3.1 Tool System
 **Location**: `LifeOS/Core/Services/Agent/`
 
-- [ ] `AgentTool.swift` (protocol)
+- [x] `AgentTool.swift` (protocol) ✅
   - Properties: `name`, `description`, `parameters` (JSON Schema)
   - Method: `execute(arguments: [String: Any]) async throws -> Any`
   - Base protocol all tools implement
 
-- [ ] Tool Implementations:
-  - [ ] `SearchSemanticTool.swift`
+- [x] Tool Implementations: ✅
+  - [x] `SearchSemanticTool.swift` ✅
     - **Purpose**: Semantic search through journal entries
     - **Parameters**:
       - `query` (string, required) - Natural language search query
@@ -418,7 +441,7 @@ Building a pure Swift journal analytics system with AI agent capabilities for Li
       ]
       ```
 
-  - [ ] `GetMonthSummaryTool.swift`
+  - [x] `GetMonthSummaryTool.swift` ✅
     - **Purpose**: Get AI-generated summary for a specific month
     - **Parameters**:
       - `year` (integer, required) - Year (e.g., 2025)
@@ -455,7 +478,7 @@ Building a pure Swift journal analytics system with AI agent capabilities for Li
       }
       ```
 
-  - [ ] `GetYearSummaryTool.swift`
+  - [x] `GetYearSummaryTool.swift` ✅
     - **Purpose**: Get AI-generated summary for an entire year
     - **Parameters**:
       - `year` (integer, required) - Year (e.g., 2025)
@@ -479,7 +502,7 @@ Building a pure Swift journal analytics system with AI agent capabilities for Li
       }
       ```
 
-  - [ ] `GetTimeSeriesTool.swift`
+  - [x] `GetTimeSeriesTool.swift` ✅
     - **Purpose**: Get happiness/stress/energy time series data for graphing
     - **Parameters**:
       - `metric` (string, required) - "happiness", "stress", or "energy"
@@ -507,7 +530,7 @@ Building a pure Swift journal analytics system with AI agent capabilities for Li
       }
       ```
 
-  - [ ] `GetCurrentStateSnapshotTool.swift`
+  - [x] `GetCurrentStateSnapshotTool.swift` ✅
     - **Purpose**: Analyze current life state based on recent entries
     - **Parameters**:
       - `days` (integer, optional, default 30) - Number of recent days to analyze
@@ -530,7 +553,7 @@ Building a pure Swift journal analytics system with AI agent capabilities for Li
       }
       ```
 
-- [ ] `ToolRegistry.swift`
+- [x] `ToolRegistry.swift` ✅
   - Central registry of all available tools
   - `registerTool(tool: AgentTool)` - Add a tool
   - `getToolSchemas() -> [[String: Any]]` - Get OpenAI function definitions
@@ -540,11 +563,11 @@ Building a pure Swift journal analytics system with AI agent capabilities for Li
 ### 3.2 Agent Kernel (ReAct Loop)
 **Location**: `LifeOS/Core/Services/Agent/`
 
-- [ ] `AgentMessage.swift` (model)
+- [x] `AgentMessage.swift` (model) ✅
   - Enum: `.user(String)`, `.assistant(String)`, `.toolCall(ToolCall)`, `.toolResult(String, Any)`
   - Converts to/from OpenAI message format
 
-- [ ] `AgentKernel.swift`
+- [x] `AgentKernel.swift` ✅
   - **Main ReAct loop**: Reasoning + Acting
   - `runAgent(userMessage: String, conversationHistory: [AgentMessage]) async throws -> AgentResponse`
     1. Build messages array with system prompt + history + user message
@@ -605,7 +628,7 @@ You have access to the following tools:
 - Avoid being preachy or prescriptive
 ```
 
-- [ ] `AgentResponse.swift` (model)
+- [x] `AgentResponse.swift` (model) ✅
   - `text: String` - Final answer to user
   - `toolsUsed: [String]` - Names of tools called
   - `metadata: [String: Any]` - Extra info (iterations, tokens used, etc.)
@@ -724,9 +747,25 @@ let response2 = try await agent.runAgent(
 ```
 
 ### 3.3 Current State Analyzer
-**Location**: `LifeOS/Core/Services/Agent/`
+**Location**: `LifeOS/Core/Services/Agent/` and `LifeOS/Core/Models/Analytics/`
 
-- [ ] `CurrentState.swift` (model)
+- [x] `Trend.swift` (model) ✅
+  - Enum: up, down, stable
+  - Initialize from value comparisons
+  - User-friendly descriptions and emoji
+
+- [x] `MoodState.swift` (model) ✅
+  - `happiness: Double`, `stress: Double`, `energy: Double`
+  - `happinessTrend: Trend`, `stressTrend: Trend`, `energyTrend: Trend`
+  - Recent 7-day vs previous 7-day comparison
+
+- [x] `AISuggestedTodo.swift` (model) ✅
+  - `title: String`, `firstStep: String`, `whyItMatters: String`
+  - `theme: String` - grouping (health, relationships, work, etc.)
+  - `estimatedMinutes: Int`
+  - Can convert to existing `TODOItem` model
+
+- [x] `CurrentState.swift` (model) ✅
   - `themes: [String]` - Top 3-5 current themes
   - `mood: MoodState` - happiness, stress, energy levels with trends
   - `stressors: [String]` - Active stressors
@@ -734,18 +773,7 @@ let response2 = try await agent.runAgent(
   - `suggestedTodos: [AISuggestedTodo]` - AI-generated action items
   - Codable for storage
 
-- [ ] `MoodState.swift` (model)
-  - `happiness: Double`, `stress: Double`, `energy: Double`
-  - `trend: Trend` - enum: up, down, stable
-  - Recent 7-day vs previous 7-day comparison
-
-- [ ] `AISuggestedTodo.swift` (model)
-  - `title: String`, `firstStep: String`, `whyItMatters: String`
-  - `theme: String` - grouping (health, relationships, work, etc.)
-  - `estimatedMinutes: Int`
-  - Can convert to existing `TODOItem` model
-
-- [ ] `CurrentStateAnalyzer.swift`
+- [x] `CurrentStateAnalyzer.swift` ✅
   - `analyze(days: Int = 30) async throws -> CurrentState`
     - Load last N days of EntryAnalytics
     - Call OpenAI with structured outputs
@@ -859,122 +887,771 @@ let response2 = try await agent.runAgent(
 
 **Goal**: Build user interfaces for visualizing analytics and chatting with the AI agent.
 
+**Total Files**: 25 SwiftUI views and view models
+**Estimated Time**: 2-3 days for basic implementation
+**Priority Order**: AI Chat (HIGH) → Current State Dashboard (HIGH) → Analytics Dashboard (MEDIUM) → Settings (MEDIUM)
+
+### Prerequisites
+- ✅ Phase 1-3 complete (all backend services ready)
+- ✅ Existing UI architecture (Sidebar, Navigation, Theme system)
+- ✅ SwiftUI Charts available (iOS 16+)
+
+### Directory Structure
+```
+LifeOS/Features/
+├── Analytics/          # NEW: Analytics dashboard with charts (10 files)
+│   ├── Views/
+│   └── ViewModels/
+├── AIChat/             # NEW: Conversational AI interface (7 files)
+│   ├── Views/
+│   ├── ViewModels/
+│   └── Services/
+├── Insights/           # EXISTING (empty): Current state dashboard (6 files)
+│   ├── Views/
+│   └── ViewModels/
+└── Settings/           # EXTEND: Add analytics section (2 files)
+    └── SettingsView.swift (UPDATE)
+```
+
+### Integration Points
+1. **Sidebar Navigation** - Add "Analytics" and "AI Chat" menu items
+2. **Insights Page** - Replace empty view with Current State Dashboard
+3. **Settings** - Add "Analytics" section with processing controls
+4. **Editor** - Optional: Add "Ask AI" button to query about current entry
+
+---
+
 ### 4.1 Analytics Dashboard
 **Location**: `LifeOS/Features/Analytics/`
+**Files**: 10 total
+**Priority**: MEDIUM (nice visualization but not critical for core functionality)
+
+**Core Container:**
 
 - [ ] `AnalyticsView.swift`
   - Main analytics dashboard container
-  - Tab navigation: **Overview** | **Happiness** | **Timeline** | **Insights**
-  - Toolbar with date range picker, export button
-  - Empty state if no analytics processed yet
+  - **Tab navigation**: TabView with 4 tabs (Overview, Happiness, Timeline, Insights)
+  - **Toolbar**: Date range picker, refresh button, export PDF button
+  - **Empty state**: Show when no analytics processed yet with "Process Entries" button
+  - **Dependencies**: AnalyticsViewModel
+  - **Example Layout**:
+    ```swift
+    TabView {
+        AnalyticsOverviewView().tabItem { Label("Overview", systemImage: "chart.bar") }
+        HappinessChartView().tabItem { Label("Happiness", systemImage: "heart") }
+        TimelineView().tabItem { Label("Timeline", systemImage: "calendar") }
+        AnalyticsInsightsView().tabItem { Label("Insights", systemImage: "lightbulb") }
+    }
+    ```
 
 - [ ] `AnalyticsViewModel.swift`
-  - `@Published var timeSeries: [TimeSeriesDataPoint]`
-  - `@Published var selectedDateRange: DateInterval`
-  - `loadAnalytics() async`
-  - `refreshAnalytics() async`
-  - Coordinate with DatabaseService, HappinessIndexCalculator
+  - **Published properties**:
+    - `@Published var timeSeries: [TimeSeriesDataPoint] = []`
+    - `@Published var selectedDateRange: DateInterval = last90Days`
+    - `@Published var isLoading: Bool = false`
+    - `@Published var error: Error?`
+    - `@Published var hasData: Bool = false`
+  - **Methods**:
+    - `loadAnalytics() async` - Load initial data
+    - `refreshAnalytics() async` - Refresh current view
+    - `updateDateRange(_ range: DateInterval)` - Change date range
+  - **Dependencies**: DatabaseService, EntryAnalyticsRepository, HappinessIndexCalculator
+  - **Example**:
+    ```swift
+    func loadAnalytics() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let calculator = HappinessIndexCalculator(...)
+            timeSeries = try await calculator.computeTimeSeriesDataPoints(
+                from: selectedDateRange.start,
+                to: selectedDateRange.end
+            )
+            hasData = !timeSeries.isEmpty
+        } catch {
+            self.error = error
+        }
+    }
+    ```
 
-- [ ] **Overview Tab** - `AnalyticsOverviewView.swift`
-  - Key metrics cards: current happiness, 30-day average, trend
-  - Mini happiness chart (last 90 days)
-  - Recent highlights (top 3 positive/negative events)
+**Tab Views:**
 
-- [ ] **Happiness Tab** - `HappinessChartView.swift`
-  - Full-screen time series chart using **SwiftUI Charts**
-  - Interactive: tap data point → show that day's entry
-  - Show confidence intervals as shaded area
-  - Zoom controls (1M, 3M, 6M, 1Y, ALL)
-  - Annotations for major events
+- [ ] `AnalyticsOverviewView.swift`
+  - **Layout**: VStack with 3 sections
+  - **Section 1 - Key Metrics** (3 MetricCardView in HStack):
+    - Current happiness (today or latest)
+    - 30-day average
+    - Trend arrow (↗️↘️→) with percentage change
+  - **Section 2 - Mini Chart**:
+    - Last 90 days happiness chart (simplified, non-interactive)
+    - Uses SwiftUI Charts LineChart
+  - **Section 3 - Recent Highlights**:
+    - Top 3 positive events (green)
+    - Top 3 negative events (red)
+    - Each showing date, title, sentiment score
+  - **Dependencies**: AnalyticsViewModel, MetricCardView, EventChipView
 
-- [ ] **Timeline Tab** - `TimelineView.swift`
-  - Year → Month → Week drill-down hierarchy
-  - Horizontal timeline visualization
-  - Events color-coded by sentiment (green=positive, red=negative)
-  - Tap month → show MonthDetailView
+- [ ] `HappinessChartView.swift`
+  - **Full-screen interactive chart** using SwiftUI Charts
+  - **Chart type**: LineChart with optional RuleMark annotations
+  - **Features**:
+    - Confidence intervals as AreaMark (shaded region)
+    - Tap data point → show tooltip with date, value, and "View Entry" button
+    - Zoom controls: Segmented picker (1M, 3M, 6M, 1Y, ALL)
+    - Major events as vertical lines with annotations
+  - **Y-axis**: 0-100 (happiness score)
+  - **X-axis**: Dates (auto-formatted based on range)
+  - **Example**:
+    ```swift
+    Chart {
+        ForEach(timeSeries) { point in
+            LineMark(
+                x: .value("Date", point.date),
+                y: .value("Happiness", point.value)
+            )
+            .foregroundStyle(.blue)
 
-- [ ] `MonthDetailView.swift` (sheet/detail view)
-  - Month summary text
-  - Happiness stats with CI
-  - Key topics as chips
-  - Drivers: positive (green) and negative (red) lists
-  - Top events table with dates and descriptions
-  - "Show Evidence" buttons → navigate to source entry in EntryListView
+            AreaMark(
+                x: .value("Date", point.date),
+                yStart: .value("CI Lower", point.confidenceInterval.lower),
+                yEnd: .value("CI Upper", point.confidenceInterval.upper)
+            )
+            .foregroundStyle(.blue.opacity(0.2))
+        }
+    }
+    ```
 
-- [ ] **Insights Tab** - `AnalyticsInsightsView.swift`
-  - Correlations (e.g., "Happiness higher when...")
-  - Patterns (e.g., "You tend to feel better on weekends")
-  - Growth metrics (e.g., "30% improvement since last quarter")
-  - Future: ML-powered insights
+- [ ] `TimelineView.swift`
+  - **Drill-down hierarchy**: Year → Month → Week
+  - **Layout**: ScrollView with year sections
+  - **Year section**: Shows yearly happiness average and top 3 events
+  - **Month grid**: 12 month cards with mini bar chart and happiness average
+  - **Tap month** → Present MonthDetailView as sheet
+  - **Color coding**:
+    - Green: Happiness > 70
+    - Yellow: 40-70
+    - Red: < 40
+  - **Dependencies**: MonthSummaryRepository, YearSummaryRepository
+
+- [ ] `MonthDetailView.swift` (Sheet presentation)
+  - **Header**: "October 2025" with happiness score and trend
+  - **Section 1 - Summary**: AI-generated narrative text
+  - **Section 2 - Statistics**:
+    - Happiness average with confidence interval
+    - Happiness range (min-max)
+    - Number of entries analyzed
+  - **Section 3 - Themes**: Horizontal ScrollView of theme chips
+  - **Section 4 - What Went Well**: Green-bordered list of positive drivers
+  - **Section 5 - Challenges**: Red-bordered list of negative drivers
+  - **Section 6 - Top Events**:
+    - List of DetectedEvent objects
+    - Each with date, title, description, sentiment
+    - "Show in Journal" button → navigate to source entry
+  - **Footer**: "View Full Month in Timeline" button
+  - **Dependencies**: MonthSummary model, EventChipView
+
+- [ ] `AnalyticsInsightsView.swift`
+  - **Layout**: List of insight cards
+  - **Insight types**:
+    1. **Correlations**: "Your happiness is 15% higher on weekends"
+    2. **Patterns**: "You journal more when stressed (correlation: 0.72)"
+    3. **Growth**: "30% improvement in happiness since last quarter"
+    4. **Recommendations**: "Consider journaling daily for better tracking"
+  - **Data source**: Computed from EntryAnalytics using statistical analysis
+  - **Future**: ML-powered pattern detection
+  - **Empty state**: "Not enough data yet. Process more entries to see insights."
+
+**Reusable Components:**
+
+- [ ] `MetricCardView.swift`
+  - **Reusable card** for displaying a single metric
+  - **Properties**: `title: String`, `value: String`, `trend: Trend?`, `icon: String`
+  - **Layout**: VStack with icon, value (large), title (small), trend arrow
+  - **Styling**: Rounded rectangle with shadow, adapts to theme
+  - **Example**:
+    ```swift
+    MetricCardView(
+        title: "Current Happiness",
+        value: "72",
+        trend: .up,
+        icon: "heart.fill"
+    )
+    ```
+
+- [ ] `EventChipView.swift`
+  - **Chip-style view** for displaying events
+  - **Properties**: `event: DetectedEvent`
+  - **Layout**: HStack with date, title, sentiment color indicator
+  - **Colors**: Green (positive), Red (negative), Gray (neutral)
+  - **Tap action**: Navigate to source entry
+  - **Example**: `[Oct 15] Coffee with Sarah ●` (green dot)
+
+- [ ] `EmptyAnalyticsView.swift`
+  - **Empty state** shown when no analytics data exists
+  - **Content**:
+    - Icon (chart with slash)
+    - Title: "No Analytics Data"
+    - Message: "Process your journal entries to see analytics"
+    - Button: "Go to Settings" → navigate to Settings > Analytics
+  - **Styling**: Centered in parent view with subtle background
 
 ### 4.2 AI Chat Interface
 **Location**: `LifeOS/Features/AIChat/`
+**Files**: 7 total
+**Priority**: HIGH (main user interaction point for AI features)
+
+**Core Views:**
 
 - [ ] `AIChatView.swift`
-  - Full-screen chat interface
-  - `ScrollView` with message bubbles
-  - Text input field at bottom with send button
-  - Loading indicator while agent is thinking
-  - "Tools used" badges below AI responses
-  - Conversation persistence (save/load from UserDefaults or database)
+  - **Full-screen chat interface** with conversation history
+  - **Layout**:
+    - **Header**: "AI Assistant" with clear conversation button
+    - **Messages**: ScrollView with message bubbles (auto-scroll to bottom)
+    - **Input**: ChatInputView at bottom (fixed position)
+    - **Loading**: TypingIndicatorView when AI is processing
+  - **Features**:
+    - Conversation persistence (load on appear, save on change)
+    - Pull-to-refresh to reload conversation
+    - Empty state: "Ask me anything about your journal"
+    - Tool badges shown below AI messages
+  - **Dependencies**: AIChatViewModel, MessageBubbleView, ChatInputView
+  - **Example Structure**:
+    ```swift
+    VStack(spacing: 0) {
+        // Header
+        ChatHeaderView(onClear: viewModel.clearConversation)
 
-- [ ] `MessageBubbleView.swift`
-  - User messages: right-aligned, blue background
-  - AI messages: left-aligned, gray background
-  - Markdown rendering for formatted text
-  - Special rendering for structured data:
-    - Todo lists → checkbox UI
-    - Time series data → inline mini chart
-    - Events → timeline snippets
-  - Copy button for AI responses
+        // Messages
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    ForEach(viewModel.messages) { message in
+                        MessageBubbleView(message: message)
+                            .id(message.id)
+                    }
+                    if viewModel.isLoading {
+                        TypingIndicatorView()
+                    }
+                }
+            }
+            .onChange(of: viewModel.messages.count) {
+                proxy.scrollTo(viewModel.messages.last?.id, anchor: .bottom)
+            }
+        }
+
+        // Input
+        ChatInputView(onSend: viewModel.sendMessage)
+    }
+    ```
 
 - [ ] `AIChatViewModel.swift`
-  - `@Published var messages: [AgentMessage]`
-  - `@Published var isLoading: Bool`
-  - `sendMessage(text: String) async`
-    - Call AgentKernel.runAgent
-    - Append user message
-    - Append AI response
-  - `clearConversation()`
-  - Save conversation to UserDefaults for persistence
+  - **Core view model** managing agent interaction and conversation state
+  - **Published Properties**:
+    - `@Published var messages: [ChatMessage] = []` (wrapper around AgentMessage)
+    - `@Published var isLoading: Bool = false`
+    - `@Published var error: String?`
+    - `@Published var toolsUsed: [String] = []`
+  - **Methods**:
+    - `sendMessage(_ text: String) async` - Main message sending
+    - `clearConversation()` - Reset conversation
+    - `loadConversation()` - Load from persistence
+    - `saveConversation()` - Save to persistence
+  - **Dependencies**: AgentKernel, ToolRegistry, ConversationPersistenceService
+  - **Example Implementation**:
+    ```swift
+    @MainActor
+    func sendMessage(_ text: String) async {
+        guard !text.isEmpty else { return }
+
+        // Add user message
+        let userMessage = ChatMessage(role: .user, content: text)
+        messages.append(userMessage)
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            // Convert to AgentMessage format
+            let history = messages.map { $0.toAgentMessage() }
+
+            // Call agent
+            let response = try await agentKernel.runAgent(
+                userMessage: text,
+                conversationHistory: history
+            )
+
+            // Add AI response
+            let aiMessage = ChatMessage(
+                role: .assistant,
+                content: response.text,
+                toolsUsed: response.toolsUsed
+            )
+            messages.append(aiMessage)
+            toolsUsed = response.toolsUsed
+
+            // Persist
+            saveConversation()
+
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+    ```
+
+- [ ] `MessageBubbleView.swift`
+  - **Message display component** with rich formatting
+  - **Properties**: `message: ChatMessage`
+  - **Layout**:
+    - **User messages**: Right-aligned, blue bubble, white text
+    - **AI messages**: Left-aligned, gray bubble, black text, markdown support
+  - **Features**:
+    - Markdown rendering using AttributedString
+    - Code blocks with syntax highlighting
+    - Copy button for AI messages (appears on hover)
+    - Tool badges at bottom of AI messages
+    - Timestamps (show on long press)
+  - **Example**:
+    ```swift
+    HStack {
+        if message.role == .user {
+            Spacer()
+        }
+
+        VStack(alignment: message.role == .user ? .trailing : .leading) {
+            // Message content with markdown
+            Text(markdownAttributedString(message.content))
+                .padding()
+                .background(message.role == .user ? Color.blue : Color(.systemGray5))
+                .foregroundColor(message.role == .user ? .white : .primary)
+                .cornerRadius(16)
+
+            // Tool badges (AI only)
+            if message.role == .assistant, !message.toolsUsed.isEmpty {
+                HStack {
+                    ForEach(message.toolsUsed, id: \.self) { tool in
+                        ToolBadgeView(toolName: tool)
+                    }
+                }
+            }
+        }
+
+        if message.role == .assistant {
+            Spacer()
+        }
+    }
+    ```
+
+- [ ] `ChatInputView.swift`
+  - **Text input component** with send button
+  - **Properties**: `onSend: (String) -> Void`
+  - **Layout**: HStack with TextField and Button
+  - **Features**:
+    - Multi-line text input (expands up to 5 lines)
+    - Send button (disabled when empty)
+    - Placeholder: "Ask about your journal..."
+    - Submit on Enter (Shift+Enter for new line)
+    - Clear after send
+  - **Styling**: Rounded border, adapts to theme
+  - **Example**:
+    ```swift
+    HStack(spacing: 12) {
+        TextField("Ask about your journal...", text: $messageText, axis: .vertical)
+            .textFieldStyle(.roundedBorder)
+            .lineLimit(1...5)
+            .onSubmit {
+                sendMessage()
+            }
+
+        Button(action: sendMessage) {
+            Image(systemName: "arrow.up.circle.fill")
+                .font(.system(size: 32))
+        }
+        .disabled(messageText.isEmpty)
+    }
+    .padding()
+    .background(Color(.systemBackground))
+    ```
+
+- [ ] `ToolBadgeView.swift`
+  - **Small badge** showing which tool was used
+  - **Properties**: `toolName: String`
+  - **Layout**: Compact capsule with icon and label
+  - **Icon mapping**:
+    - `search_semantic` → magnifyingglass
+    - `get_month_summary` → calendar
+    - `get_year_summary` → calendar.badge.clock
+    - `get_time_series` → chart.line.uptrend.xyaxis
+    - `get_current_state` → person.crop.circle
+  - **Colors**: Subtle background, small font
+  - **Example**: `[🔍 search_semantic]` in gray capsule
+
+- [ ] `TypingIndicatorView.swift`
+  - **Loading animation** while AI is thinking
+  - **Design**: Three animated dots (bounce animation)
+  - **Layout**: Left-aligned (where AI message will appear)
+  - **Styling**: Gray bubble matching AI message style
+  - **Animation**: Dots bounce in sequence with 0.2s delay
+  - **Example**:
+    ```swift
+    HStack(spacing: 4) {
+        ForEach(0..<3) { index in
+            Circle()
+                .fill(Color.gray)
+                .frame(width: 8, height: 8)
+                .offset(y: offset)
+                .animation(
+                    Animation.easeInOut(duration: 0.6)
+                        .repeatForever()
+                        .delay(Double(index) * 0.2),
+                    value: offset
+                )
+        }
+    }
+    .padding()
+    .background(Color(.systemGray5))
+    .cornerRadius(16)
+    ```
+
+**Services:**
+
+- [ ] `ConversationPersistenceService.swift`
+  - **Service for saving/loading conversations**
+  - **Storage**: UserDefaults or database (start with UserDefaults)
+  - **Methods**:
+    - `saveConversation(_ messages: [ChatMessage])` - Persist to storage
+    - `loadConversation() -> [ChatMessage]` - Load from storage
+    - `clearConversation()` - Delete stored conversation
+  - **Format**: JSON encoding of ChatMessage array
+  - **Key**: "ai_chat_conversation_history"
+  - **Auto-save**: Triggered after each message exchange
+  - **Example**:
+    ```swift
+    struct ChatMessage: Codable, Identifiable {
+        let id: UUID
+        let role: Role
+        let content: String
+        let toolsUsed: [String]
+        let timestamp: Date
+
+        enum Role: String, Codable {
+            case user, assistant
+        }
+
+        func toAgentMessage() -> AgentMessage {
+            // Convert to AgentMessage format
+        }
+    }
+    ```
 
 ### 4.3 Current State Dashboard
-**Location**: `LifeOS/Features/Dashboard/`
+**Location**: `LifeOS/Features/Insights/` (use existing empty directory)
+**Files**: 6 total
+**Priority**: HIGH (actionable insights for users)
 
 - [ ] `CurrentStateDashboardView.swift`
-  - Compact widget showing current life state
-  - **Header**: "How you're doing right now" with refresh button
-  - **Mood section**: Happiness/Stress/Energy gauges with trend arrows
-  - **Themes section**: Chips for top 3-5 themes (color-coded)
-  - **Stressors section**: Red-outlined list
-  - **Protective factors section**: Green-outlined list
-  - Refresh every time view appears (cache for 1 hour)
-
-- [ ] `AISuggestedTodosView.swift`
-  - "AI Suggestions" header with sparkle icon ✨
-  - Grouped todos by theme (collapsible sections)
-  - Each todo card shows:
-    - Title
-    - First step (smaller font)
-    - "Why it matters" (tooltip or expandable)
-    - Estimated time badge
-    - "+" button to add to today's journal entry
-  - Integration with existing TODO system
+  - **Main dashboard** showing current life state analysis
+  - **Layout**: ScrollView with 5 sections
+  - **Section 1 - Header**:
+    - Title: "How You're Doing" with calendar icon
+    - Subtitle: "Based on last 30 days"
+    - Refresh button (manual + auto on appear)
+    - Last updated timestamp
+  - **Section 2 - Mood Gauges**:
+    - 3 circular gauges (Happiness, Stress, Energy) with MoodGaugeView
+    - Each shows current value, trend arrow, and percentage
+    - Color-coded: Green (good), Yellow (moderate), Red (needs attention)
+  - **Section 3 - Themes**:
+    - Header: "Current Themes"
+    - ThemeChipsView with top 3-5 themes
+    - Color-coded by category
+  - **Section 4 - Stressors & Protective Factors**:
+    - StressorsProtectiveView (split view)
+    - Left: Red-bordered list of stressors
+    - Right: Green-bordered list of protective factors
+  - **Section 5 - AI Suggestions**:
+    - AISuggestedTodosView
+  - **Empty State**: "Analyzing your recent entries..." with loading spinner
+  - **Dependencies**: CurrentStateDashboardViewModel
 
 - [ ] `CurrentStateDashboardViewModel.swift`
-  - `@Published var currentState: CurrentState?`
-  - `@Published var isLoading: Bool`
-  - `loadCurrentState() async`
-    - Call CurrentStateAnalyzer
-    - Update UI
-  - `addTodoToJournal(todo: AISuggestedTodo)`
-    - Find or create today's entry
-    - Add as TODOItem
+  - **View model** managing current state data
+  - **Published Properties**:
+    - `@Published var currentState: CurrentState?`
+    - `@Published var isLoading: Bool = false`
+    - `@Published var error: String?`
+    - `@Published var lastUpdated: Date?`
+    - `@Published var cacheValid: Bool = false`
+  - **Methods**:
+    - `loadCurrentState(days: Int = 30) async`
+    - `refreshState() async` - Force refresh
+    - `addTodoToJournal(_ todo: AISuggestedTodo)` - Add to today's entry
+    - `checkCache()` - Validate 1-hour cache
+  - **Cache Logic**: Cache for 1 hour, auto-refresh if stale
+  - **Dependencies**: CurrentStateAnalyzer, FileManagerService
+  - **Example**:
+    ```swift
+    func loadCurrentState(days: Int = 30) async {
+        // Check cache
+        if let lastUpdated = lastUpdated,
+           Date().timeIntervalSince(lastUpdated) < 3600 {  // 1 hour
+            cacheValid = true
+            return
+        }
 
-- [ ] **Integration Point**
-  - Add new sidebar item "Insights" below "Calendar"
-  - Or add as tab in existing CalendarView
-  - Route: `/insights`
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let analyzer = CurrentStateAnalyzer(...)
+            currentState = try await analyzer.analyze(days: days)
+            lastUpdated = Date()
+            cacheValid = true
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+    ```
+
+- [ ] `MoodGaugeView.swift`
+  - **Circular gauge** for displaying mood metrics
+  - **Properties**:
+    - `metric: String` (e.g., "Happiness")
+    - `value: Double` (0-100)
+    - `trend: Trend` (up/down/stable)
+    - `icon: String` (SF Symbol name)
+  - **Design**: Circular progress ring with value in center
+  - **Colors**:
+    - Green: 70-100
+    - Yellow: 40-70
+    - Red: 0-40
+  - **Trend Indicator**: Small arrow badge in corner
+  - **Example**:
+    ```swift
+    ZStack {
+        // Background circle
+        Circle()
+            .stroke(Color.gray.opacity(0.2), lineWidth: 12)
+
+        // Progress circle
+        Circle()
+            .trim(from: 0, to: value / 100)
+            .stroke(gaugeColor, lineWidth: 12)
+            .rotationEffect(.degrees(-90))
+
+        // Center content
+        VStack {
+            Image(systemName: icon)
+            Text("\(Int(value))")
+                .font(.title)
+                .bold()
+            Text(metric)
+                .font(.caption)
+        }
+
+        // Trend badge
+        if let trend = trend {
+            Image(systemName: trend.emoji)
+                .position(x: ..., y: ...)
+        }
+    }
+    ```
+
+- [ ] `ThemeChipsView.swift`
+  - **Horizontal scrolling chips** for themes
+  - **Properties**: `themes: [String]`
+  - **Layout**: ScrollView horizontal with HStack
+  - **Chip Design**:
+    - Rounded capsule
+    - Icon based on theme (💼work, ❤️health, 👥relationships, etc.)
+    - Theme name
+    - Color-coded background
+  - **Example**: `[💼 Career Growth] [❤️ Health & Fitness] [👥 Social Life]`
+
+- [ ] `StressorsProtectiveView.swift`
+  - **Split view** showing stressors and protective factors
+  - **Properties**:
+    - `stressors: [String]`
+    - `protectiveFactors: [String]`
+  - **Layout**: HStack with two VStack columns
+  - **Left Column - Stressors**:
+    - Header: "Stressors" with warning icon
+    - Red-bordered list
+    - Each item with bullet point
+  - **Right Column - Protective Factors**:
+    - Header: "Going Well" with checkmark icon
+    - Green-bordered list
+    - Each item with bullet point
+  - **Responsive**: Stack vertically on narrow screens
+
+- [ ] `AISuggestedTodosView.swift`
+  - **Expandable todo suggestions** from AI
+  - **Properties**: `todos: [AISuggestedTodo]`, `onAdd: (AISuggestedTodo) -> Void`
+  - **Layout**: List grouped by theme
+  - **Header**: "✨ AI Suggestions" with expand/collapse
+  - **Theme Sections**: Collapsible DisclosureGroup per theme
+  - **Todo Card**:
+    - **Title**: Bold, 16pt
+    - **First Step**: Gray, 14pt, indented
+    - **Why It Matters**: Expandable (tap to show)
+    - **Time Badge**: "30 min" in capsule
+    - **Add Button**: "+" button → adds to journal
+  - **Example**:
+    ```
+    ✨ AI Suggestions (5)
+
+    > 💼 Work (2 suggestions)
+      ▸ Break down project into tasks     [30 min] [+]
+        First: List all deliverables
+        Why: Reduce overwhelm...
+
+      ▸ Schedule weekly review             [15 min] [+]
+        First: Block Friday 4pm
+        Why: Stay on track...
+
+    > ❤️ Health (1 suggestion)
+      ▸ Establish bedtime routine          [15 min] [+]
+        First: Set phone alarm
+        Why: Better sleep improves mood...
+    ```
+
+---
+
+### 4.4 Settings Integration
+**Location**: `LifeOS/Features/Settings/`
+**Files**: 2 total (1 update, 1 new)
+**Priority**: MEDIUM (needed for processing management)
+
+- [ ] **Update** `SettingsView.swift`
+  - **Add new section**: "Analytics" (after existing sections)
+  - **Section Contents**:
+    1. **Process All Entries** button
+       - Primary action button
+       - Disabled if already processing
+       - Shows AnalyticsProgressView as sheet
+       - Confirmation: "This will analyze all journal entries. Continue?"
+    2. **Recompute Summaries** button
+       - Secondary action button
+       - Only enabled if entries processed
+       - Updates monthly/yearly summaries
+    3. **Storage Stats** (read-only info):
+       - Total entries: X
+       - Entries analyzed: Y (Z%)
+       - Database size: W MB
+       - Last processed: [date]
+    4. **Clear All Analytics** button
+       - Destructive action (red)
+       - Confirmation dialog with warning
+       - Calls `DatabaseService.clearAllData()`
+  - **Example Section**:
+    ```swift
+    Section {
+        Button("Process All Entries") {
+            showProcessingSheet = true
+        }
+        .disabled(isProcessing)
+
+        Button("Recompute Summaries") {
+            Task { await recomputeSummaries() }
+        }
+        .disabled(!hasAnalyticsData)
+
+        LabeledContent("Total Entries", value: "\(totalEntries)")
+        LabeledContent("Analyzed", value: "\(analyzedEntries) (\(percentage)%)")
+        LabeledContent("Database Size", value: "\(dbSize) MB")
+        LabeledContent("Last Processed", value: lastProcessedDate.formatted())
+
+        Button("Clear All Analytics", role: .destructive) {
+            showClearConfirmation = true
+        }
+    } header: {
+        Text("Analytics")
+    }
+    ```
+
+- [ ] `AnalyticsProgressView.swift`
+  - **Modal sheet** showing processing progress
+  - **Layout**: VStack with centered content
+  - **Components**:
+    1. **Title**: "Processing Journal Entries"
+    2. **Progress Bar**: 0-100% with ProgressView
+    3. **Status Text**: "Processing entry 45 of 320..."
+    4. **Current Operation**: "Analyzing emotions..." (smaller font)
+    5. **Time Stats**:
+       - Elapsed time: "2m 15s"
+       - Estimated remaining: "3m 45s" (based on rate)
+    6. **Cancel Button**: Bottom of sheet with confirmation
+  - **Features**:
+    - Updates every 0.5s
+    - Auto-dismiss on completion with success message
+    - Error handling with retry option
+    - Progress persists if app goes to background
+  - **Example**:
+    ```swift
+    VStack(spacing: 20) {
+        Text("Processing Journal Entries")
+            .font(.title2)
+            .bold()
+
+        ProgressView(value: progress, total: 1.0)
+            .progressViewStyle(.linear)
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text(statusText)
+                .font(.body)
+            Text(currentOperation)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+
+        HStack {
+            VStack(alignment: .leading) {
+                Text("Elapsed")
+                Text(elapsedTime)
+                    .font(.caption)
+            }
+            Spacer()
+            VStack(alignment: .trailing) {
+                Text("Remaining")
+                Text(estimatedRemaining)
+                    .font(.caption)
+            }
+        }
+
+        Button("Cancel", role: .cancel) {
+            showCancelConfirmation = true
+        }
+    }
+    .padding()
+    ```
+
+---
+
+### Implementation Summary
+
+**Total Files Created: 25**
+
+1. **Analytics Dashboard** (10 files):
+   - AnalyticsView, AnalyticsViewModel
+   - AnalyticsOverviewView, HappinessChartView, TimelineView, MonthDetailView, AnalyticsInsightsView
+   - MetricCardView, EventChipView, EmptyAnalyticsView
+
+2. **AI Chat** (7 files):
+   - AIChatView, AIChatViewModel
+   - MessageBubbleView, ChatInputView, ToolBadgeView, TypingIndicatorView
+   - ConversationPersistenceService
+
+3. **Current State Dashboard** (6 files):
+   - CurrentStateDashboardView, CurrentStateDashboardViewModel
+   - MoodGaugeView, ThemeChipsView, StressorsProtectiveView, AISuggestedTodosView
+
+4. **Settings** (2 files):
+   - SettingsView (UPDATE)
+   - AnalyticsProgressView
+
+**Navigation Integration:**
+- Add "Analytics" to Sidebar → `AnalyticsView`
+- Add "AI Chat" to Sidebar → `AIChatView`
+- Update "Insights" page → `CurrentStateDashboardView`
 
 ---
 

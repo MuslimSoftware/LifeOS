@@ -1,0 +1,133 @@
+import Foundation
+
+/// Central registry for managing and executing agent tools
+class ToolRegistry {
+    private var tools: [String: AgentTool] = [:]
+
+    /// Register a tool with the registry
+    /// - Parameter tool: The tool to register
+    func registerTool(_ tool: AgentTool) {
+        tools[tool.name] = tool
+    }
+
+    /// Get all registered tool names
+    var registeredToolNames: [String] {
+        Array(tools.keys).sorted()
+    }
+
+    /// Get OpenAI function definitions for all registered tools
+    /// This format is used for the OpenAI function calling API
+    /// - Returns: Array of function definitions
+    func getToolSchemas() -> [[String: Any]] {
+        return tools.values.map { $0.toOpenAIFunction() }
+    }
+
+    /// Execute a tool by name with the given arguments
+    /// - Parameters:
+    ///   - name: The name of the tool to execute
+    ///   - arguments: Dictionary of arguments for the tool
+    /// - Returns: The result of the tool execution
+    /// - Throws: ToolRegistryError if the tool is not found or execution fails
+    func executeTool(name: String, arguments: [String: Any]) async throws -> Any {
+        guard let tool = tools[name] else {
+            throw ToolRegistryError.toolNotFound(name)
+        }
+
+        do {
+            let result = try await tool.execute(arguments: arguments)
+            return result
+        } catch {
+            throw ToolRegistryError.executionFailed(toolName: name, error: error)
+        }
+    }
+
+    /// Get a tool by name
+    /// - Parameter name: The tool name
+    /// - Returns: The tool if found, nil otherwise
+    func getTool(name: String) -> AgentTool? {
+        return tools[name]
+    }
+
+    /// Remove all registered tools
+    func clearAll() {
+        tools.removeAll()
+    }
+
+    /// Get the count of registered tools
+    var count: Int {
+        tools.count
+    }
+}
+
+// MARK: - Errors
+
+enum ToolRegistryError: Error, LocalizedError {
+    case toolNotFound(String)
+    case executionFailed(toolName: String, error: Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .toolNotFound(let name):
+            return "Tool not found: '\(name)'. Available tools: \(name)"
+        case .executionFailed(let toolName, let error):
+            return "Tool '\(toolName)' execution failed: \(error.localizedDescription)"
+        }
+    }
+}
+
+// MARK: - Convenience Initializer
+
+extension ToolRegistry {
+    /// Create a fully configured tool registry with all standard tools
+    /// - Parameters:
+    ///   - databaseService: The database service for repositories
+    ///   - openAI: The OpenAI service
+    /// - Returns: A configured ToolRegistry
+    static func createStandardRegistry(
+        databaseService: DatabaseService,
+        openAI: OpenAIService
+    ) -> ToolRegistry {
+        let registry = ToolRegistry()
+
+        // Create repositories
+        let chunkRepository = ChunkRepository(databaseService: databaseService)
+        let entryAnalyticsRepository = EntryAnalyticsRepository(databaseService: databaseService)
+        let monthSummaryRepository = MonthSummaryRepository(databaseService: databaseService)
+        let yearSummaryRepository = YearSummaryRepository(databaseService: databaseService)
+
+        // Create services
+        let vectorSearch = VectorSearchService(chunkRepository: chunkRepository)
+        let calculator = HappinessIndexCalculator(repository: entryAnalyticsRepository)
+        let analyzer = CurrentStateAnalyzer(
+            repository: entryAnalyticsRepository,
+            calculator: calculator,
+            openAI: openAI
+        )
+
+        // Register all tools
+        registry.registerTool(SearchSemanticTool(
+            vectorSearch: vectorSearch,
+            chunkRepository: chunkRepository,
+            openAI: openAI
+        ))
+
+        registry.registerTool(GetMonthSummaryTool(
+            repository: monthSummaryRepository
+        ))
+
+        registry.registerTool(GetYearSummaryTool(
+            repository: yearSummaryRepository
+        ))
+
+        registry.registerTool(GetTimeSeriesTool(
+            calculator: calculator,
+            repository: entryAnalyticsRepository
+        ))
+
+        registry.registerTool(GetCurrentStateSnapshotTool(
+            analyzer: analyzer
+        ))
+
+        return registry
+    }
+}
