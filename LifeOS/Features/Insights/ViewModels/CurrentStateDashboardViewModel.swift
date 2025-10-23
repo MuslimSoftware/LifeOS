@@ -68,7 +68,6 @@ class CurrentStateDashboardViewModel: ObservableObject {
         // Get today's entry or create a new one
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MMM d"
-        _ = dateFormatter.string(from: Date())
 
         let entries = fileManager.loadExistingEntries()
 

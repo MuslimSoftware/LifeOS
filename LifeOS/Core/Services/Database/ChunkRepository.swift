@@ -159,7 +159,7 @@ class ChunkRepository {
     private func dataToFloatArray(_ data: Data) -> [Float] {
         let count = data.count / MemoryLayout<Float>.size
         var floats = [Float](repeating: 0, count: count)
-        floats.withUnsafeMutableBytes { buffer in
+        _ = floats.withUnsafeMutableBytes { buffer in
             data.copyBytes(to: buffer)
         }
         return floats

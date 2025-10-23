@@ -35,7 +35,7 @@ class ImportViewModel {
             
             do {
                 _ = try await importService.processFiles(urls) { [weak self] progress in
-                    await self?.handleProgress(progress)
+                    self?.handleProgress(progress)
                 }
             } catch let error as ImportError {
                 errorMessage = error.errorDescription
