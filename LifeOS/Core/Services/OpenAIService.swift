@@ -34,6 +34,14 @@ class OpenAIService: OCRServiceProtocol {
     private let chatCompletionsURL = "https://api.openai.com/v1/chat/completions"
     private let embeddingsURL = "https://api.openai.com/v1/embeddings"
 
+    // URLSession with longer timeout for embeddings and completions
+    private lazy var urlSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 120 // 2 minutes
+        config.timeoutIntervalForResource = 300 // 5 minutes
+        return URLSession(configuration: config)
+    }()
+
     init(apiKeyStorage: APIKeyStorageProtocol = KeychainService.shared) {
         self.apiKeyStorage = apiKeyStorage
     }
@@ -102,7 +110,7 @@ class OpenAIService: OCRServiceProtocol {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
 
         if let httpResponse = response as? HTTPURLResponse {
             guard httpResponse.statusCode == 200 else {
@@ -136,89 +144,157 @@ class OpenAIService: OCRServiceProtocol {
     /// Generate embedding vector for text using OpenAI embeddings API
     /// - Parameter text: The text to embed
     /// - Returns: Float array representing the embedding vector (3072 dimensions for text-embedding-3-large)
-    func generateEmbedding(for text: String) async throws -> [Float] {
-        let apiKey = try getAPIKey()
+    func generateEmbedding(for text: String, retryCount: Int = 3) async throws -> [Float] {
+        var lastError: Error?
 
-        let payload: [String: Any] = [
-            "model": "text-embedding-3-large",
-            "input": text,
-            "encoding_format": "float"
-        ]
+        for attempt in 0..<retryCount {
+            do {
+                let apiKey = try getAPIKey()
 
-        guard let url = URL(string: embeddingsURL) else {
-            throw OpenAIError.networkError("Invalid URL")
-        }
+                let payload: [String: Any] = [
+                    "model": "text-embedding-3-large",
+                    "input": text,
+                    "encoding_format": "float"
+                ]
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+                guard let url = URL(string: embeddingsURL) else {
+                    throw OpenAIError.networkError("Invalid URL")
+                }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        if let httpResponse = response as? HTTPURLResponse {
-            guard httpResponse.statusCode == 200 else {
-                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-                throw OpenAIError.networkError("Status \(httpResponse.statusCode): \(errorMessage)")
+                let (data, response) = try await urlSession.data(for: request)
+
+                if let httpResponse = response as? HTTPURLResponse {
+                    // Handle rate limiting with exponential backoff
+                    if httpResponse.statusCode == 429 {
+                        let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
+                        let delay = Double(retryAfter ?? "5") ?? 5.0
+                        print("⏳ Rate limited, waiting \(delay)s before retry...")
+                        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        continue
+                    }
+
+                    guard httpResponse.statusCode == 200 else {
+                        let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                        throw OpenAIError.networkError("Status \(httpResponse.statusCode): \(errorMessage)")
+                    }
+                }
+
+                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let dataArray = json["data"] as? [[String: Any]],
+                      let firstItem = dataArray.first,
+                      let embedding = firstItem["embedding"] as? [Double] else {
+                    throw OpenAIError.invalidResponse
+                }
+
+                // Convert Double to Float for storage efficiency
+                return embedding.map { Float($0) }
+
+            } catch {
+                lastError = error
+
+                // Check if it's a cancellation error - don't retry those
+                if (error as NSError).code == NSURLErrorCancelled {
+                    throw error
+                }
+
+                // Only retry on transient errors
+                if attempt < retryCount - 1 {
+                    let delay = pow(2.0, Double(attempt)) // Exponential backoff: 1s, 2s, 4s
+                    print("⚠️ Embedding request failed (attempt \(attempt + 1)/\(retryCount)), retrying in \(delay)s...")
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } else {
+                    print("❌ Embedding request failed after \(retryCount) attempts")
+                }
             }
         }
 
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let dataArray = json["data"] as? [[String: Any]],
-              let firstItem = dataArray.first,
-              let embedding = firstItem["embedding"] as? [Double] else {
-            throw OpenAIError.invalidResponse
-        }
-
-        // Convert Double to Float for storage efficiency
-        return embedding.map { Float($0) }
+        throw lastError ?? OpenAIError.noResponse
     }
 
     /// Generate embeddings for multiple texts in batch
     /// - Parameter texts: Array of texts to embed
     /// - Returns: Array of embedding vectors
-    func generateEmbeddings(for texts: [String]) async throws -> [[Float]] {
+    func generateEmbeddings(for texts: [String], retryCount: Int = 3) async throws -> [[Float]] {
         guard !texts.isEmpty else { return [] }
 
-        let apiKey = try getAPIKey()
+        var lastError: Error?
 
-        let payload: [String: Any] = [
-            "model": "text-embedding-3-large",
-            "input": texts,
-            "encoding_format": "float"
-        ]
+        for attempt in 0..<retryCount {
+            do {
+                let apiKey = try getAPIKey()
 
-        guard let url = URL(string: embeddingsURL) else {
-            throw OpenAIError.networkError("Invalid URL")
-        }
+                let payload: [String: Any] = [
+                    "model": "text-embedding-3-large",
+                    "input": texts,
+                    "encoding_format": "float"
+                ]
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+                guard let url = URL(string: embeddingsURL) else {
+                    throw OpenAIError.networkError("Invalid URL")
+                }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        if let httpResponse = response as? HTTPURLResponse {
-            guard httpResponse.statusCode == 200 else {
-                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-                throw OpenAIError.networkError("Status \(httpResponse.statusCode): \(errorMessage)")
+                let (data, response) = try await urlSession.data(for: request)
+
+                if let httpResponse = response as? HTTPURLResponse {
+                    // Handle rate limiting with exponential backoff
+                    if httpResponse.statusCode == 429 {
+                        let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
+                        let delay = Double(retryAfter ?? "5") ?? 5.0
+                        print("⏳ Rate limited on batch, waiting \(delay)s before retry...")
+                        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        continue
+                    }
+
+                    guard httpResponse.statusCode == 200 else {
+                        let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                        throw OpenAIError.networkError("Status \(httpResponse.statusCode): \(errorMessage)")
+                    }
+                }
+
+                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let dataArray = json["data"] as? [[String: Any]] else {
+                    throw OpenAIError.invalidResponse
+                }
+
+                return try dataArray.map { item in
+                    guard let embedding = item["embedding"] as? [Double] else {
+                        throw OpenAIError.invalidResponse
+                    }
+                    return embedding.map { Float($0) }
+                }
+
+            } catch {
+                lastError = error
+
+                // Check if it's a cancellation error - don't retry those
+                if (error as NSError).code == NSURLErrorCancelled {
+                    throw error
+                }
+
+                // Only retry on transient errors
+                if attempt < retryCount - 1 {
+                    let delay = pow(2.0, Double(attempt)) // Exponential backoff: 1s, 2s, 4s
+                    print("⚠️ Batch embedding request failed (attempt \(attempt + 1)/\(retryCount)), retrying in \(delay)s...")
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } else {
+                    print("❌ Batch embedding request failed after \(retryCount) attempts")
+                }
             }
         }
 
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let dataArray = json["data"] as? [[String: Any]] else {
-            throw OpenAIError.invalidResponse
-        }
-
-        return try dataArray.map { item in
-            guard let embedding = item["embedding"] as? [Double] else {
-                throw OpenAIError.invalidResponse
-            }
-            return embedding.map { Float($0) }
-        }
+        throw lastError ?? OpenAIError.noResponse
     }
 
     // MARK: - Structured Outputs (Chat Completions)
@@ -255,7 +331,7 @@ class OpenAIService: OCRServiceProtocol {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
 
         if let httpResponse = response as? HTTPURLResponse {
             guard httpResponse.statusCode == 200 else {
@@ -308,7 +384,7 @@ class OpenAIService: OCRServiceProtocol {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await urlSession.data(for: request)
 
         if let httpResponse = response as? HTTPURLResponse {
             guard httpResponse.statusCode == 200 else {
@@ -364,8 +440,38 @@ struct ChatResponse {
 }
 
 /// Represents a tool/function call from the model
-struct ToolCall {
+struct ToolCall: Codable {
     let id: String
     let name: String
     let arguments: [String: Any]
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, arguments
+    }
+
+    init(id: String, name: String, arguments: [String: Any]) {
+        self.id = id
+        self.name = name
+        self.arguments = arguments
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        if let data = try? container.decode(Data.self, forKey: .arguments),
+           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            arguments = dict
+        } else {
+            arguments = [:]
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        let data = try JSONSerialization.data(withJSONObject: arguments)
+        try container.encode(data, forKey: .arguments)
+    }
 }

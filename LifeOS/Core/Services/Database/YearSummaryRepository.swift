@@ -34,8 +34,8 @@ class YearSummaryRepository {
                     summary.year,
                     summary.summaryText,
                     summary.happinessAvg,
-                    summary.happinessCI.0,
-                    summary.happinessCI.1,
+                    summary.happinessConfidenceInterval.lower,
+                    summary.happinessConfidenceInterval.upper,
                     String(data: topEventsJSON, encoding: .utf8),
                     String(data: sourceSpansJSON, encoding: .utf8)
                 ]
@@ -82,7 +82,7 @@ class YearSummaryRepository {
 
         guard let topEventsData = topEventsJSONStr.data(using: .utf8),
               let sourceSpansData = sourceSpansJSONStr.data(using: .utf8) else {
-            throw DatabaseError.invalidJSON
+            throw LifeOSDatabaseError.invalidJSON
         }
 
         let topEvents = try JSONDecoder().decode([DetectedEvent].self, from: topEventsData)
@@ -92,7 +92,7 @@ class YearSummaryRepository {
             year: year,
             summaryText: summaryText,
             happinessAvg: happinessAvg,
-            happinessCI: (happinessCILower, happinessCIUpper),
+            happinessConfidenceInterval: (happinessCILower, happinessCIUpper),
             topEvents: topEvents,
             sourceSpans: sourceSpans
         )

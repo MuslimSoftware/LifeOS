@@ -38,8 +38,8 @@ class MonthSummaryRepository {
                     summary.month,
                     summary.summaryText,
                     summary.happinessAvg,
-                    summary.happinessCI.0,
-                    summary.happinessCI.1,
+                    summary.happinessConfidenceInterval.lower,
+                    summary.happinessConfidenceInterval.upper,
                     summary.driversPositive.joined(separator: "|||"),
                     summary.driversNegative.joined(separator: "|||"),
                     String(data: topEventsJSON, encoding: .utf8),
@@ -106,7 +106,7 @@ class MonthSummaryRepository {
 
         guard let topEventsData = topEventsJSONStr.data(using: .utf8),
               let sourceSpansData = sourceSpansJSONStr.data(using: .utf8) else {
-            throw DatabaseError.invalidJSON
+            throw LifeOSDatabaseError.invalidJSON
         }
 
         let topEvents = try JSONDecoder().decode([DetectedEvent].self, from: topEventsData)
@@ -117,7 +117,7 @@ class MonthSummaryRepository {
             month: month,
             summaryText: summaryText,
             happinessAvg: happinessAvg,
-            happinessCI: (happinessCILower, happinessCIUpper),
+            happinessConfidenceInterval: (happinessCILower, happinessCIUpper),
             driversPositive: driversPositive,
             driversNegative: driversNegative,
             topEvents: topEvents,
@@ -126,6 +126,6 @@ class MonthSummaryRepository {
     }
 }
 
-enum DatabaseError: Error {
+enum MonthSummaryError: Error {
     case invalidJSON
 }

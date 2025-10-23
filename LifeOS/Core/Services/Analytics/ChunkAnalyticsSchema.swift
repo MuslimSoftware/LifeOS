@@ -65,7 +65,7 @@ struct ChunkAnalyticsSchema {
                                 "description": "Emotional sentiment associated with this event"
                             ]
                         ],
-                        "required": ["title", "sentiment"],
+                        "required": ["title", "description", "sentiment"],
                         "additionalProperties": false
                     ]
                 ],

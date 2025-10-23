@@ -69,21 +69,13 @@ class CurrentStateAnalyzer {
         let recentHappiness = recentEntries.map { $0.happinessScore }
         let currentHappiness = recentHappiness.isEmpty ? 50.0 : recentHappiness.reduce(0, +) / Double(recentHappiness.count)
 
-        let recentStress = recentEntries.compactMap { entry in
-            calculator.computeStressScore(
-                anxiety: entry.emotions.anxiety,
-                arousal: entry.arousal,
-                negativeEventDensity: Double(entry.events.filter { $0.sentiment < -0.3 }.count)
-            )
+        let recentStress = recentEntries.map { entry in
+            calculator.computeStressScore(analytics: entry)
         }
         let currentStress = recentStress.isEmpty ? 50.0 : recentStress.reduce(0, +) / Double(recentStress.count)
 
-        let recentEnergy = recentEntries.compactMap { entry in
-            calculator.computeEnergyScore(
-                arousal: entry.arousal,
-                valence: entry.valence,
-                joy: entry.emotions.joy
-            )
+        let recentEnergy = recentEntries.map { entry in
+            calculator.computeEnergyScore(analytics: entry)
         }
         let currentEnergy = recentEnergy.isEmpty ? 50.0 : recentEnergy.reduce(0, +) / Double(recentEnergy.count)
 
@@ -91,21 +83,13 @@ class CurrentStateAnalyzer {
         let previousHappiness = previousEntries.map { $0.happinessScore }
         let prevHappiness = previousHappiness.isEmpty ? currentHappiness : previousHappiness.reduce(0, +) / Double(previousHappiness.count)
 
-        let previousStress = previousEntries.compactMap { entry in
-            calculator.computeStressScore(
-                anxiety: entry.emotions.anxiety,
-                arousal: entry.arousal,
-                negativeEventDensity: Double(entry.events.filter { $0.sentiment < -0.3 }.count)
-            )
+        let previousStress = previousEntries.map { entry in
+            calculator.computeStressScore(analytics: entry)
         }
         let prevStress = previousStress.isEmpty ? currentStress : previousStress.reduce(0, +) / Double(previousStress.count)
 
-        let previousEnergy = previousEntries.compactMap { entry in
-            calculator.computeEnergyScore(
-                arousal: entry.arousal,
-                valence: entry.valence,
-                joy: entry.emotions.joy
-            )
+        let previousEnergy = previousEntries.map { entry in
+            calculator.computeEnergyScore(analytics: entry)
         }
         let prevEnergy = previousEnergy.isEmpty ? currentEnergy : previousEnergy.reduce(0, +) / Double(previousEnergy.count)
 
@@ -199,8 +183,8 @@ class CurrentStateAnalyzer {
         for event in sortedEvents {
             let sentiment = event.sentiment > 0 ? "positive" : event.sentiment < 0 ? "negative" : "neutral"
             summary += "\n- \(event.title) (\(sentiment), \(String(format: "%.2f", event.sentiment)))"
-            if let desc = event.description {
-                summary += ": \(desc)"
+            if !event.description.isEmpty {
+                summary += ": \(event.description)"
             }
         }
 

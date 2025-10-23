@@ -2,11 +2,12 @@ import Foundation
 import GRDB
 
 /// Errors that can occur during database operations
-enum DatabaseError: Error, LocalizedError {
+enum LifeOSDatabaseError: Error, LocalizedError {
     case initializationFailed(String)
     case migrationFailed(String)
     case queryFailed(String)
     case notFound
+    case invalidJSON
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +19,8 @@ enum DatabaseError: Error, LocalizedError {
             return "Database query failed: \(message)"
         case .notFound:
             return "Record not found"
+        case .invalidJSON:
+            return "Invalid JSON data in database"
         }
     }
 }
@@ -59,14 +62,14 @@ class DatabaseService {
 
             print("✅ Database initialized at: \(databaseURL.path)")
         } catch {
-            throw DatabaseError.initializationFailed(error.localizedDescription)
+            throw LifeOSDatabaseError.initializationFailed(error.localizedDescription)
         }
     }
 
     /// Get the database queue for custom queries
     func getQueue() throws -> DatabaseQueue {
         guard let queue = dbQueue else {
-            throw DatabaseError.initializationFailed("Database not initialized")
+            throw LifeOSDatabaseError.initializationFailed("Database not initialized")
         }
         return queue
     }
@@ -74,7 +77,7 @@ class DatabaseService {
     /// Run database migrations
     private func migrate() throws {
         guard let dbQueue = dbQueue else {
-            throw DatabaseError.migrationFailed("Database queue not initialized")
+            throw LifeOSDatabaseError.migrationFailed("Database queue not initialized")
         }
 
         var migrator = DatabaseMigrator()
@@ -171,7 +174,7 @@ class DatabaseService {
             try migrator.migrate(dbQueue)
             print("✅ Database migrations completed")
         } catch {
-            throw DatabaseError.migrationFailed(error.localizedDescription)
+            throw LifeOSDatabaseError.migrationFailed(error.localizedDescription)
         }
     }
 

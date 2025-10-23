@@ -90,14 +90,14 @@ extension ToolRegistry {
         let registry = ToolRegistry()
 
         // Create repositories
-        let chunkRepository = ChunkRepository(databaseService: databaseService)
-        let entryAnalyticsRepository = EntryAnalyticsRepository(databaseService: databaseService)
-        let monthSummaryRepository = MonthSummaryRepository(databaseService: databaseService)
-        let yearSummaryRepository = YearSummaryRepository(databaseService: databaseService)
+        let chunkRepository = ChunkRepository(dbService: databaseService)
+        let entryAnalyticsRepository = EntryAnalyticsRepository(dbService: databaseService)
+        let monthSummaryRepository = MonthSummaryRepository(dbService: databaseService)
+        let yearSummaryRepository = YearSummaryRepository(dbService: databaseService)
 
         // Create services
         let vectorSearch = VectorSearchService(chunkRepository: chunkRepository)
-        let calculator = HappinessIndexCalculator(repository: entryAnalyticsRepository)
+        let calculator = HappinessIndexCalculator()
         let analyzer = CurrentStateAnalyzer(
             repository: entryAnalyticsRepository,
             calculator: calculator,

@@ -98,7 +98,7 @@ class EntryAnalyticsRepository {
     private func rowToAnalytics(_ row: Row) throws -> EntryAnalytics {
         guard let id = UUID(uuidString: row["id"]),
               let entryId = UUID(uuidString: row["entry_id"]) else {
-            throw DatabaseError.queryFailed("Invalid UUID in analytics row")
+            throw LifeOSDatabaseError.queryFailed("Invalid UUID in analytics row")
         }
 
         let emotionsData = (row["emotions_json"] as String).data(using: .utf8)!

@@ -109,12 +109,26 @@ class ChunkRepository {
         }
     }
 
+    /// Check if chunks exist for a specific entry
+    /// - Parameter entryId: The entry UUID to check
+    /// - Returns: True if at least one chunk exists for the entry
+    func hasChunksForEntry(entryId: UUID) throws -> Bool {
+        try dbService.getQueue().read { db in
+            let count = try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM chunks WHERE entry_id = ?",
+                arguments: [entryId.uuidString]
+            )
+            return (count ?? 0) > 0
+        }
+    }
+
     // MARK: - Private Helpers
 
     private func rowToChunk(_ row: Row) throws -> JournalChunk {
         guard let id = UUID(uuidString: row["id"]),
               let entryId = UUID(uuidString: row["entry_id"]) else {
-            throw DatabaseError.queryFailed("Invalid UUID in chunk row")
+            throw LifeOSDatabaseError.queryFailed("Invalid UUID in chunk row")
         }
 
         let embeddingData: Data? = row["embedding"]
@@ -134,7 +148,7 @@ class ChunkRepository {
 
     private func floatArrayToData(_ floats: [Float]) -> Data {
         var data = Data(count: floats.count * MemoryLayout<Float>.size)
-        _ = data.withUnsafeMutableBytes { buffer in
+        data.withUnsafeMutableBytes { buffer in
             floats.withUnsafeBytes { floatBuffer in
                 buffer.copyMemory(from: floatBuffer)
             }
@@ -145,7 +159,7 @@ class ChunkRepository {
     private func dataToFloatArray(_ data: Data) -> [Float] {
         let count = data.count / MemoryLayout<Float>.size
         var floats = [Float](repeating: 0, count: count)
-        _ = floats.withUnsafeMutableBytes { buffer in
+        floats.withUnsafeMutableBytes { buffer in
             data.copyBytes(to: buffer)
         }
         return floats

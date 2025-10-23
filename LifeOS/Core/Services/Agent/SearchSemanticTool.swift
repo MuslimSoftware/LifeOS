@@ -64,11 +64,11 @@ class SearchSemanticTool: AgentTool {
         let queryEmbedding = try await openAI.generateEmbedding(for: query)
 
         // Perform vector search
-        let results = try vectorSearch.search(
+        let dateRange = (startDate != nil && endDate != nil) ? DateInterval(start: startDate!, end: endDate!) : nil
+        let results = try vectorSearch.searchSimilar(
             queryEmbedding: queryEmbedding,
             topK: limitedTopK,
-            startDate: startDate,
-            endDate: endDate,
+            dateRange: dateRange,
             minSimilarity: 0.5 // Only return reasonably relevant results
         )
 

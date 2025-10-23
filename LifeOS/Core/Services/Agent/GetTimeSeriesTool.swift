@@ -65,26 +65,14 @@ class GetTimeSeriesTool: AgentTool {
             dataPoints = entries.map { ($0.date, $0.happinessScore) }
 
         case "stress":
-            dataPoints = entries.compactMap { entry in
-                guard let stress = calculator.computeStressScore(
-                    anxiety: entry.emotions.anxiety,
-                    arousal: entry.arousal,
-                    negativeEventDensity: Double(entry.events.filter { $0.sentiment < -0.3 }.count)
-                ) else {
-                    return nil
-                }
+            dataPoints = entries.map { entry in
+                let stress = calculator.computeStressScore(analytics: entry)
                 return (entry.date, stress)
             }
 
         case "energy":
-            dataPoints = entries.compactMap { entry in
-                guard let energy = calculator.computeEnergyScore(
-                    arousal: entry.arousal,
-                    valence: entry.valence,
-                    joy: entry.emotions.joy
-                ) else {
-                    return nil
-                }
+            dataPoints = entries.map { entry in
+                let energy = calculator.computeEnergyScore(analytics: entry)
                 return (entry.date, energy)
             }
 

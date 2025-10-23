@@ -1,7 +1,7 @@
 import Foundation
 
-/// Temporary structure for analytics extracted from a single chunk
-/// This gets aggregated into EntryAnalytics for the full entry
+/// Analytics extracted from a single chunk of journal text
+/// Aggregated into EntryAnalytics for the full entry
 struct ChunkAnalytics: Codable {
     /// Happiness score 0-100
     let happiness: Double
@@ -37,7 +37,7 @@ struct ChunkAnalytics: Codable {
     }
 }
 
-/// Event extracted from chunk text (temporary structure)
+/// Event extracted from chunk text
 struct EventExtraction: Codable {
     let title: String
     let description: String?

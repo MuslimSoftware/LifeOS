@@ -8,8 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		2800F7412DA1CEA0008FE5F9 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 2800F7402DA1CE9A008FE5F9 /* .gitignore */; };
-		7C3C09CC2EA9C03E009FFD91 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 7C3C09CB2EA9C03E009FFD91 /* GRDB */; };
-		7C3C09CE2EA9C03E009FFD91 /* GRDB-dynamic in Frameworks */ = {isa = PBXBuildFile; productRef = 7C3C09CD2EA9C03E009FFD91 /* GRDB-dynamic */; };
+		7C3C0A402EA9D803009FFD91 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 7C3C0A3F2EA9D803009FFD91 /* GRDB */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,8 +58,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7C3C09CC2EA9C03E009FFD91 /* GRDB in Frameworks */,
-				7C3C09CE2EA9C03E009FFD91 /* GRDB-dynamic in Frameworks */,
+				7C3C0A402EA9D803009FFD91 /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -122,8 +120,7 @@
 			);
 			name = LifeOS;
 			packageProductDependencies = (
-				7C3C09CB2EA9C03E009FFD91 /* GRDB */,
-				7C3C09CD2EA9C03E009FFD91 /* GRDB-dynamic */,
+				7C3C0A3F2EA9D803009FFD91 /* GRDB */,
 			);
 			productName = LifeOS;
 			productReference = 2857D4702D5F8A8000EE1012 /* LifeOS.app */;
@@ -183,7 +180,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1610;
-				LastUpgradeCheck = 1610;
+				LastUpgradeCheck = 1640;
 				TargetAttributes = {
 					2857D46F2D5F8A8000EE1012 = {
 						CreatedOnToolsVersion = 16.1;
@@ -208,7 +205,7 @@
 			mainGroup = 2857D4672D5F8A8000EE1012;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				7C3C09CA2EA9C03E009FFD91 /* XCRemoteSwiftPackageReference "GRDB" */,
+				7C3C0A3E2EA9D803009FFD91 /* XCRemoteSwiftPackageReference "GRDB" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2857D4712D5F8A8000EE1012 /* Products */;
@@ -319,6 +316,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -380,6 +378,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -410,6 +409,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"LifeOS/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -455,6 +455,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"LifeOS/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -495,6 +496,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 6D7X9GGZAW;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleName = LifeOS;
@@ -520,6 +522,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 6D7X9GGZAW;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleName = LifeOS;
@@ -544,6 +547,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 6D7X9GGZAW;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleName = LifeOS;
@@ -568,6 +572,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 6D7X9GGZAW;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleName = LifeOS;
@@ -629,26 +634,21 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		7C3C09CA2EA9C03E009FFD91 /* XCRemoteSwiftPackageReference "GRDB" */ = {
+		7C3C0A3E2EA9D803009FFD91 /* XCRemoteSwiftPackageReference "GRDB" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/groue/GRDB.swift";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 6.0.0;
+				minimumVersion = 7.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		7C3C09CB2EA9C03E009FFD91 /* GRDB */ = {
+		7C3C0A3F2EA9D803009FFD91 /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7C3C09CA2EA9C03E009FFD91 /* XCRemoteSwiftPackageReference "GRDB" */;
+			package = 7C3C0A3E2EA9D803009FFD91 /* XCRemoteSwiftPackageReference "GRDB" */;
 			productName = GRDB;
-		};
-		7C3C09CD2EA9C03E009FFD91 /* GRDB-dynamic */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 7C3C09CA2EA9C03E009FFD91 /* XCRemoteSwiftPackageReference "GRDB" */;
-			productName = "GRDB-dynamic";
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

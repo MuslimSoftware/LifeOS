@@ -29,13 +29,11 @@ class AnalyticsPipelineService {
         self.chunkRepository = chunkRepository
         self.analyticsRepository = analyticsRepository
 
-        // Initialize analyzer with repositories
         self.entryAnalyzer = EntryAnalyzer(
             openAIService: openAIService,
             analyticsRepository: analyticsRepository
         )
 
-        // Initialize summarization service
         self.summarizationService = SummarizationService(
             openAIService: openAIService,
             analyticsRepository: analyticsRepository,
@@ -46,27 +44,20 @@ class AnalyticsPipelineService {
 
     // MARK: - Single Entry Processing
 
-    /// Process a single journal entry through the complete pipeline
-    /// - Parameter entry: The entry to process
-    /// - Throws: Pipeline errors
     func processEntry(_ entry: HumanEntry) async throws {
         print("📊 Processing entry: \(entry.filename)")
 
-        // 1. Load entry content
         guard let content = fileManagerService.loadEntry(entry) else {
             throw PipelineError.failedToLoadEntry(entry.filename)
         }
 
-        // 2. Chunk text
         let chunks = try ingestionService.chunkEntry(entry: entry, content: content)
         print("  ✂️  Created \(chunks.count) chunks")
 
-        // 3. Generate embeddings (batch)
         let chunkTexts = chunks.map { $0.text }
         let embeddings = try await openAIService.generateEmbeddings(for: chunkTexts)
         print("  🧠 Generated \(embeddings.count) embeddings")
 
-        // 4. Attach embeddings to chunks
         var chunksWithEmbeddings: [JournalChunk] = []
         for (index, chunk) in chunks.enumerated() {
             let embedding = embeddings[index]
@@ -83,11 +74,9 @@ class AnalyticsPipelineService {
             chunksWithEmbeddings.append(chunkWithEmbedding)
         }
 
-        // 5. Save chunks to database
-        try chunkRepository.saveAll(chunksWithEmbeddings)
+        try chunkRepository.saveBatch(chunksWithEmbeddings)
         print("  💾 Saved chunks to database")
 
-        // 6. Analyze entry
         let analytics = try await entryAnalyzer.analyzeEntry(entry: entry, chunks: chunksWithEmbeddings)
         print("  📈 Analyzed entry - Happiness: \(String(format: "%.1f", analytics.happinessScore))")
 
@@ -97,9 +86,14 @@ class AnalyticsPipelineService {
     // MARK: - Bulk Processing
 
     /// Process all journal entries
-    /// - Parameter progressCallback: Called with (current, total) after each entry
+    /// - Parameters:
+    ///   - progressCallback: Called with (current, total) after each entry
+    ///   - skipExisting: If true, skip entries that already have chunks (default: true)
     /// - Throws: Pipeline errors
-    func processAllEntries(progressCallback: ((Int, Int) -> Void)? = nil) async throws {
+    func processAllEntries(
+        skipExisting: Bool = true,
+        progressCallback: ((Int, Int) -> Void)? = nil
+    ) async throws {
         print("🚀 Starting bulk processing of all entries...")
 
         // Load all entries
@@ -108,23 +102,58 @@ class AnalyticsPipelineService {
 
         print("📚 Found \(total) entries to process")
 
+        // Filter out already-processed entries if skipExisting is true
+        var entriesToProcess: [HumanEntry] = []
+        if skipExisting {
+            for entry in allEntries {
+                do {
+                    // Check if analytics exists (not just chunks) to ensure full processing
+                    let hasAnalytics = try analyticsRepository.get(forEntryId: entry.id) != nil
+                    if !hasAnalytics {
+                        entriesToProcess.append(entry)
+                    }
+                } catch {
+                    print("⚠️ Error checking if entry processed: \(entry.filename)")
+                    entriesToProcess.append(entry) // Process anyway if check fails
+                }
+            }
+            print("📊 Skipping \(total - entriesToProcess.count) already-processed entries")
+        } else {
+            entriesToProcess = allEntries
+        }
+
         // Process each entry
-        for (index, entry) in allEntries.enumerated() {
-            let current = index + 1
+        var processedCount = 0
+        for (index, entry) in entriesToProcess.enumerated() {
+            // Check for task cancellation
+            try Task.checkCancellation()
 
             do {
                 try await processEntry(entry)
-                progressCallback?(current, total)
+                processedCount += 1
 
-                // Add small delay to avoid rate limiting
-                try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                // Report progress through the filtered list (entries being processed)
+                progressCallback?(processedCount, entriesToProcess.count)
+
+                // Increased delay to avoid rate limiting (2 seconds instead of 0.5)
+                try await Task.sleep(nanoseconds: 2_000_000_000) // 2.0 seconds
+
+                // Every 10 entries, add an extra pause to be extra safe
+                if (processedCount % 10) == 0 {
+                    print("⏸️  Pausing briefly after 10 entries...")
+                    try await Task.sleep(nanoseconds: 3_000_000_000) // Extra 3 seconds
+                }
+
+            } catch is CancellationError {
+                print("⚠️ Processing cancelled by user")
+                throw CancellationError()
             } catch {
                 print("⚠️ Failed to process entry \(entry.filename): \(error)")
                 // Continue with next entry rather than failing completely
             }
         }
 
-        print("✅ Bulk processing complete!")
+        print("✅ Bulk processing complete! Processed \(processedCount) entries")
     }
 
     // MARK: - Summarization

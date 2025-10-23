@@ -26,13 +26,7 @@ class SummarizationService {
 
     // MARK: - Month Summary
 
-    /// Generate a summary for a specific month
-    /// - Parameters:
-    ///   - year: The year
-    ///   - month: The month (1-12)
-    /// - Returns: MonthSummary with narrative, stats, and events
     func summarizeMonth(year: Int, month: Int) async throws -> MonthSummary {
-        // Get all analytics for the month
         let calendar = Calendar.current
         let startOfMonth = calendar.date(from: DateComponents(year: year, month: month, day: 1))!
         let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth)!
@@ -43,16 +37,10 @@ class SummarizationService {
             throw SummarizationError.noDataForPeriod
         }
 
-        // Compute happiness statistics
         let (happinessAvg, happinessCI) = happinessCalculator.computeMonthlyAggregates(entries: analytics)
-
-        // Extract all events
         let allEvents = analytics.flatMap { $0.events }
-
-        // Get top events (5-10 most salient)
         let topEvents = selectTopEvents(from: allEvents, limit: 10)
 
-        // Generate narrative summary using OpenAI
         let (summaryText, driversPositive, driversNegative) = try await generateMonthNarrative(
             year: year,
             month: month,
@@ -60,7 +48,6 @@ class SummarizationService {
             topEvents: topEvents
         )
 
-        // Collect source spans
         let sourceSpans = analytics.map { entry in
             SourceSpan(entryId: entry.entryId, startChar: 0, endChar: 0)
         }
@@ -70,33 +57,26 @@ class SummarizationService {
             month: month,
             summaryText: summaryText,
             happinessAvg: happinessAvg,
-            happinessCI: happinessCI,
+            happinessConfidenceInterval: happinessCI,
             driversPositive: driversPositive,
             driversNegative: driversNegative,
             topEvents: topEvents,
             sourceSpans: sourceSpans
         )
 
-        // Save to database
         try monthSummaryRepository.save(summary)
 
         return summary
     }
 
-    /// Generate narrative summary for a month using OpenAI
     private func generateMonthNarrative(
         year: Int,
         month: Int,
         analytics: [EntryAnalytics],
         topEvents: [DetectedEvent]
     ) async throws -> (summary: String, positive: [String], negative: [String]) {
-        // Build context for the LLM
         let monthName = DateFormatter().monthSymbols[month - 1]
-
-        // Aggregate emotion scores
         let avgEmotions = aggregateEmotions(analytics.map { $0.emotions })
-
-        // Build prompt
         let eventsText = topEvents.map { "- \($0.title) (\($0.sentiment))" }.joined(separator: "\n")
 
         let prompt = """
@@ -204,7 +184,7 @@ class SummarizationService {
             year: year,
             summaryText: summaryText,
             happinessAvg: yearlyAvg,
-            happinessCI: ci,
+            happinessConfidenceInterval: ci,
             topEvents: topEvents,
             sourceSpans: sourceSpans
         )

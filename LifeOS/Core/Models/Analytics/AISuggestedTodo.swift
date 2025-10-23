@@ -41,7 +41,7 @@ struct AISuggestedTodo: Codable, Identifiable {
         return TODOItem(
             id: id,
             text: title,
-            isCompleted: false,
+            completed: false,
             createdAt: Date()
         )
     }

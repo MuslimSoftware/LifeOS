@@ -72,14 +72,8 @@ class AgentKernel {
                     // Add the tool call to conversation
                     messages.append(.toolCall(toolCall.id, toolCall))
 
-                    // Parse arguments
-                    let arguments: [String: Any]
-                    if let jsonData = toolCall.arguments.data(using: .utf8),
-                       let parsed = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
-                        arguments = parsed
-                    } else {
-                        arguments = [:]
-                    }
+                    // Arguments are already parsed as dictionary
+                    let arguments = toolCall.arguments
 
                     // Execute the tool
                     do {

@@ -17,11 +17,7 @@ class EntryAnalyzer {
 
     // MARK: - Chunk Analysis
 
-    /// Analyze a single journal chunk to extract emotions and metrics
-    /// - Parameter chunk: The journal chunk to analyze
-    /// - Returns: Analytics extracted from this chunk
     func analyzeChunk(_ chunk: JournalChunk) async throws -> ChunkAnalytics {
-        // Build messages for OpenAI
         let messages: [[String: Any]] = [
             [
                 "role": "system",
@@ -33,11 +29,10 @@ class EntryAnalyzer {
             ]
         ]
 
-        // Call OpenAI with structured outputs
         let analytics: ChunkAnalytics = try await openAIService.chatCompletion(
             messages: messages,
             schema: ChunkAnalyticsSchema.schema,
-            model: "gpt-4o-mini"  // Use mini for cost efficiency
+            model: "gpt-4o-mini"
         )
 
         return analytics
@@ -45,18 +40,11 @@ class EntryAnalyzer {
 
     // MARK: - Entry Analysis
 
-    /// Analyze an entire journal entry by processing all its chunks
-    /// Aggregates chunk analytics using robust statistical methods
-    /// - Parameters:
-    ///   - entry: The journal entry to analyze
-    ///   - chunks: All chunks belonging to this entry
-    /// - Returns: Aggregated analytics for the entire entry
     func analyzeEntry(entry: HumanEntry, chunks: [JournalChunk]) async throws -> EntryAnalytics {
         guard !chunks.isEmpty else {
             throw AnalyticsError.noChunksToAnalyze
         }
 
-        // Analyze each chunk
         var chunkAnalytics: [ChunkAnalytics] = []
         for chunk in chunks {
             do {
@@ -64,7 +52,6 @@ class EntryAnalyzer {
                 chunkAnalytics.append(analytics)
             } catch {
                 print("⚠️ Failed to analyze chunk \(chunk.id): \(error)")
-                // Continue with other chunks rather than failing completely
             }
         }
 
@@ -72,10 +59,7 @@ class EntryAnalyzer {
             throw AnalyticsError.allChunksFailedAnalysis
         }
 
-        // Aggregate chunk analytics
         let aggregated = aggregateChunkAnalytics(chunkAnalytics)
-
-        // Parse entry date
         let entryDate = parseEntryDate(entry: entry)
 
         // Create EntryAnalytics
@@ -167,11 +151,20 @@ class EntryAnalyzer {
 
             seenTitles.insert(normalizedTitle)
 
+            // Convert string sentiment to numeric
+            let sentimentValue: Double = {
+                switch extraction.sentiment.lowercased() {
+                case "positive": return 0.5
+                case "negative": return -0.5
+                default: return 0.0
+                }
+            }()
+
             let event = DetectedEvent(
                 title: extraction.title,
-                date: nil,  // Date will be inferred from entry
-                description: extraction.description,
-                sentiment: extraction.sentiment
+                date: nil,
+                description: extraction.description ?? "",
+                sentiment: sentimentValue
             )
 
             uniqueEvents.append(event)

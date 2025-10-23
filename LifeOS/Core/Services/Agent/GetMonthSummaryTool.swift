@@ -57,28 +57,35 @@ class GetMonthSummaryTool: AgentTool {
         let calendar = Calendar.current
         let date = calendar.date(from: DateComponents(year: year, month: month)) ?? Date()
 
+        let lower = round(summary.happinessConfidenceInterval.lower * 10) / 10
+        let upper = round(summary.happinessConfidenceInterval.upper * 10) / 10
+        let avgHappiness = round(summary.happinessAvg * 10) / 10
+
+        let topEventsData = summary.topEvents.map { event -> [String: Any] in
+            let isoFormatter = ISO8601DateFormatter()
+            let dateString = event.date != nil ? isoFormatter.string(from: event.date!) : ""
+            return [
+                "title": event.title,
+                "date": dateString,
+                "description": event.description,
+                "sentiment": event.sentiment
+            ]
+        }
+
         return [
             "found": true,
             "month": formatter.string(from: date),
             "summaryText": summary.summaryText,
             "happiness": [
-                "average": round(summary.happinessAvg * 10) / 10,
+                "average": avgHappiness,
                 "confidenceInterval": [
-                    "lower": round(summary.happinessCI.0 * 10) / 10,
-                    "upper": round(summary.happinessCI.1 * 10) / 10
+                    "lower": lower,
+                    "upper": upper
                 ]
             ],
             "driversPositive": summary.driversPositive,
             "driversNegative": summary.driversNegative,
-            "topEvents": summary.topEvents.map { event in
-                let isoFormatter = ISO8601DateFormatter()
-                return [
-                    "title": event.title,
-                    "date": isoFormatter.string(from: event.date),
-                    "description": event.description ?? "",
-                    "sentiment": event.sentiment
-                ]
-            }
+            "topEvents": topEventsData
         ]
     }
 }

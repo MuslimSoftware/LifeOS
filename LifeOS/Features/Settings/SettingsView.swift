@@ -3,6 +3,7 @@ import SwiftUI
 enum SettingsSection: String, CaseIterable {
     case openai = "OpenAI API"
     case backup = "Data Backup"
+    case analytics = "Analytics"
 }
 
 struct SettingsView: View {
@@ -18,6 +19,13 @@ struct SettingsView: View {
     @State private var showImportField: Bool = false
     @State private var selectedSection: SettingsSection = .openai
     @State private var hoveredSection: SettingsSection?
+    @State private var showProcessingSheet: Bool = false
+    @State private var isProcessing: Bool = false
+    @State private var totalEntries: Int = 0
+    @State private var analyzedEntries: Int = 0
+    @State private var dbSize: String = "0"
+    @State private var lastProcessedDate: Date?
+    @State private var showClearConfirmation: Bool = false
 
     private let fileService = FileManagerService()
 
@@ -116,6 +124,8 @@ struct SettingsView: View {
                     openAISection
                 case .backup:
                     backupSection
+                case .analytics:
+                    analyticsSection
                 }
             }
         }
@@ -479,6 +489,237 @@ struct SettingsView: View {
             }
         } else {
             exportMessage = "Error: Invalid encryption key format"
+        }
+    }
+
+    private var analyticsSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Analytics & AI")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(theme.primaryText)
+
+                Text("Process your journal entries to enable AI-powered insights and analytics.")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Button("Process All Entries") {
+                    showProcessingSheet = true
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(isProcessing ? theme.dividerColor : theme.accentColor)
+                .cornerRadius(6)
+                .disabled(isProcessing)
+
+                Button("Recompute Summaries") {
+                    recomputeSummaries()
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .foregroundColor(theme.primaryText)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(theme.hoveredBackground)
+                .cornerRadius(6)
+                .disabled(analyzedEntries == 0)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Storage Information")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.primaryText)
+
+                HStack {
+                    Text("Total Entries:")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.secondaryText)
+                    Spacer()
+                    Text("\(totalEntries)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.primaryText)
+                }
+
+                HStack {
+                    Text("Analyzed Entries:")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.secondaryText)
+                    Spacer()
+                    Text("\(analyzedEntries) (\(percentage)%)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.primaryText)
+                }
+
+                HStack {
+                    Text("Database Size:")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.secondaryText)
+                    Spacer()
+                    Text("\(dbSize) MB")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.primaryText)
+                }
+
+                if let lastProcessed = lastProcessedDate {
+                    HStack {
+                        Text("Last Processed:")
+                            .font(.system(size: 12))
+                            .foregroundColor(theme.secondaryText)
+                        Spacer()
+                        Text(lastProcessed.formatted(date: .abbreviated, time: .shortened))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(theme.primaryText)
+                    }
+                }
+            }
+            .padding(12)
+            .background(theme.hoveredBackground)
+            .cornerRadius(8)
+
+            Button("Clear All Analytics", role: .destructive) {
+                showClearConfirmation = true
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(theme.destructive)
+            .cornerRadius(6)
+            .confirmationDialog("Clear All Analytics", isPresented: $showClearConfirmation) {
+                Button("Clear All Data", role: .destructive) {
+                    clearAnalytics()
+                }
+            } message: {
+                Text("This will delete all analytics data, embeddings, and summaries. This action cannot be undone.")
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("About Analytics")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.secondaryText)
+
+                Text("• Journal entries are analyzed using AI to extract emotions and events")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.tertiaryText)
+
+                Text("• Embeddings enable semantic search through your journal")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.tertiaryText)
+
+                Text("• Processing may take several minutes for large journals")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.tertiaryText)
+            }
+            .padding(12)
+            .background(theme.hoveredBackground)
+            .cornerRadius(8)
+        }
+        .padding(24)
+        .sheet(isPresented: $showProcessingSheet, onDismiss: {
+            loadAnalyticsStats()
+        }) {
+            AnalyticsProgressView()
+        }
+        .onAppear {
+            loadAnalyticsStats()
+        }
+    }
+
+    private var percentage: Int {
+        guard totalEntries > 0 else { return 0 }
+        return Int((Double(analyzedEntries) / Double(totalEntries)) * 100)
+    }
+
+    private func loadAnalyticsStats() {
+        totalEntries = fileService.loadExistingEntries().count
+
+        do {
+            let dbService = DatabaseService.shared
+            try dbService.initialize()
+            let analyticsRepo = EntryAnalyticsRepository(dbService: dbService)
+            let allAnalytics = try analyticsRepo.getAllAnalytics()
+            analyzedEntries = allAnalytics.count
+
+            // allAnalytics is sorted DESC, so .first is the MOST RECENT
+            if let latestAnalysis = allAnalytics.first {
+                lastProcessedDate = latestAnalysis.analyzedAt
+            }
+
+            let dbURL = FileManager.default.urls(
+                for: .documentDirectory,
+                in: .userDomainMask
+            )[0].appendingPathComponent("LifeOS/analytics.db")
+
+            if let attributes = try? FileManager.default.attributesOfItem(atPath: dbURL.path),
+               let fileSize = attributes[.size] as? Int64 {
+                let sizeInMB = Double(fileSize) / 1_048_576
+                dbSize = String(format: "%.2f", sizeInMB)
+            }
+        } catch {
+            print("⚠️ Failed to load analytics stats: \(error)")
+        }
+    }
+
+    private func clearAnalytics() {
+        do {
+            try DatabaseService.shared.clearAllData()
+            loadAnalyticsStats()
+        } catch {
+            print("⚠️ Failed to clear analytics: \(error)")
+        }
+    }
+
+    private func recomputeSummaries() {
+        Task {
+            do {
+                let dbService = DatabaseService.shared
+                let analyticsRepo = EntryAnalyticsRepository(dbService: dbService)
+                let monthSummaryRepo = MonthSummaryRepository(dbService: dbService)
+                let yearSummaryRepo = YearSummaryRepository(dbService: dbService)
+
+                let summarizationService = SummarizationService(
+                    analyticsRepository: analyticsRepo,
+                    monthSummaryRepository: monthSummaryRepo,
+                    yearSummaryRepository: yearSummaryRepo
+                )
+
+                let allAnalytics = try analyticsRepo.getAllAnalytics()
+                let calendar = Calendar.current
+
+                var monthsYears: Set<String> = []
+                for analytics in allAnalytics {
+                    let year = calendar.component(.year, from: analytics.date)
+                    let month = calendar.component(.month, from: analytics.date)
+                    monthsYears.insert("\(year)-\(month)")
+                }
+
+                for monthYear in monthsYears {
+                    let components = monthYear.split(separator: "-")
+                    let year = Int(components[0])!
+                    let month = Int(components[1])!
+                    _ = try await summarizationService.summarizeMonth(year: year, month: month)
+                }
+
+                var years: Set<Int> = []
+                for analytics in allAnalytics {
+                    years.insert(calendar.component(.year, from: analytics.date))
+                }
+
+                for year in years {
+                    _ = try await summarizationService.summarizeYear(year: year)
+                }
+
+                print("✅ Summaries recomputed successfully")
+            } catch {
+                print("⚠️ Failed to recompute summaries: \(error)")
+            }
         }
     }
 }
