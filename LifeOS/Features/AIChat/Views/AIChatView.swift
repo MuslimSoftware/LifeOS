@@ -9,9 +9,9 @@ import SwiftUI
 
 /// Full-screen AI chat interface with conversation history
 struct AIChatView: View {
+    @Environment(\.theme) private var theme
     @StateObject private var viewModel: AIChatViewModel
     @State private var messageText: String = ""
-    @State private var showClearConfirmation = false
 
     init(agentKernel: AgentKernel) {
         _viewModel = StateObject(wrappedValue: AIChatViewModel(agentKernel: agentKernel))
@@ -19,9 +19,6 @@ struct AIChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            headerView
-
             // Messages
             messagesView
 
@@ -41,38 +38,7 @@ struct AIChatView: View {
                 isLoading: viewModel.isLoading
             )
         }
-        .background(Color(nsColor: .windowBackgroundColor))
-    }
-
-    private var headerView: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("AI Assistant")
-                    .font(.headline)
-                if !viewModel.messages.isEmpty {
-                    Text("\(viewModel.messages.count) messages")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            Spacer()
-
-            Button(action: { showClearConfirmation = true }) {
-                Image(systemName: "trash")
-                    .foregroundColor(.secondary)
-            }
-            .disabled(viewModel.messages.isEmpty)
-            .confirmationDialog("Clear Conversation", isPresented: $showClearConfirmation) {
-                Button("Clear All Messages", role: .destructive) {
-                    viewModel.clearConversation()
-                }
-            } message: {
-                Text("This will delete all conversation history. This action cannot be undone.")
-            }
-        }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(theme.surfaceColor)
     }
 
     private var messagesView: some View {
@@ -93,8 +59,10 @@ struct AIChatView: View {
                             .padding(.horizontal)
                     }
                 }
+                .frame(maxWidth: 700)
                 .padding(.vertical)
             }
+            .background(theme.surfaceColor)
             .onChange(of: viewModel.messages.count) { _, _ in
                 if let lastMessage = viewModel.messages.last {
                     withAnimation {
@@ -153,7 +121,7 @@ struct AIChatView: View {
                             .font(.subheadline)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(Color(nsColor: .controlBackgroundColor))
+                            .background(theme.hoveredBackground)
                             .cornerRadius(8)
                     }
                 }
@@ -161,6 +129,7 @@ struct AIChatView: View {
             .padding(.top)
         }
         .padding()
+        .frame(maxHeight: .infinity, alignment: .center)
     }
 
     private func errorBanner(_ error: String) -> some View {

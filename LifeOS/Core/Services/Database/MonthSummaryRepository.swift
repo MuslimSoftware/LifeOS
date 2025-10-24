@@ -12,40 +12,78 @@ class MonthSummaryRepository {
     /// Save month summary to the database
     func save(_ summary: MonthSummary) throws {
         try dbService.getQueue().write { db in
+            let keyTopicsJSON = try JSONEncoder().encode(summary.keyTopics)
+            let driversPositiveJSON = try JSONEncoder().encode(summary.driversPositive)
+            let driversNegativeJSON = try JSONEncoder().encode(summary.driversNegative)
             let topEventsJSON = try JSONEncoder().encode(summary.topEvents)
             let sourceSpansJSON = try JSONEncoder().encode(summary.sourceSpans)
 
-            try db.execute(
-                sql: """
-                INSERT INTO month_summaries (
-                    year, month, summary_text, happiness_avg,
-                    happiness_ci_lower, happiness_ci_upper,
-                    drivers_positive, drivers_negative,
-                    top_events_json, source_spans_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(year, month) DO UPDATE SET
-                    summary_text = excluded.summary_text,
-                    happiness_avg = excluded.happiness_avg,
-                    happiness_ci_lower = excluded.happiness_ci_lower,
-                    happiness_ci_upper = excluded.happiness_ci_upper,
-                    drivers_positive = excluded.drivers_positive,
-                    drivers_negative = excluded.drivers_negative,
-                    top_events_json = excluded.top_events_json,
-                    source_spans_json = excluded.source_spans_json
-                """,
+            // Check if summary already exists for this year/month
+            let existingId = try String.fetchOne(
+                db,
+                sql: "SELECT id FROM month_summaries WHERE year = ? AND month = ?",
+                arguments: [summary.year, summary.month]
+            )
+
+            if let existingId = existingId {
+                // Update existing record
+                try db.execute(
+                    sql: """
+                    UPDATE month_summaries SET
+                        summary_text = ?,
+                        key_topics_json = ?,
+                        happiness_avg = ?,
+                        happiness_ci_lower = ?,
+                        happiness_ci_upper = ?,
+                        drivers_positive_json = ?,
+                        drivers_negative_json = ?,
+                        top_events_json = ?,
+                        source_spans_json = ?,
+                        generated_at = ?
+                    WHERE id = ?
+                    """,
+                    arguments: [
+                        summary.summaryText,
+                        String(data: keyTopicsJSON, encoding: .utf8),
+                        summary.happinessAvg,
+                        summary.happinessConfidenceInterval.lower,
+                        summary.happinessConfidenceInterval.upper,
+                        String(data: driversPositiveJSON, encoding: .utf8),
+                        String(data: driversNegativeJSON, encoding: .utf8),
+                        String(data: topEventsJSON, encoding: .utf8),
+                        String(data: sourceSpansJSON, encoding: .utf8),
+                        summary.generatedAt,
+                        existingId
+                    ]
+                )
+            } else {
+                // Insert new record
+                try db.execute(
+                    sql: """
+                    INSERT INTO month_summaries (
+                        id, year, month, summary_text, key_topics_json,
+                        happiness_avg, happiness_ci_lower, happiness_ci_upper,
+                        drivers_positive_json, drivers_negative_json,
+                        top_events_json, source_spans_json, generated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
                 arguments: [
+                    summary.id.uuidString,
                     summary.year,
                     summary.month,
                     summary.summaryText,
+                    String(data: keyTopicsJSON, encoding: .utf8),
                     summary.happinessAvg,
                     summary.happinessConfidenceInterval.lower,
                     summary.happinessConfidenceInterval.upper,
-                    summary.driversPositive.joined(separator: "|||"),
-                    summary.driversNegative.joined(separator: "|||"),
+                    String(data: driversPositiveJSON, encoding: .utf8),
+                    String(data: driversNegativeJSON, encoding: .utf8),
                     String(data: topEventsJSON, encoding: .utf8),
-                    String(data: sourceSpansJSON, encoding: .utf8)
+                    String(data: sourceSpansJSON, encoding: .utf8),
+                    summary.generatedAt
                 ]
-            )
+                )
+            }
         }
     }
 
@@ -89,39 +127,48 @@ class MonthSummaryRepository {
     // MARK: - Private Helpers
 
     private func rowToSummary(_ row: Row) throws -> MonthSummary {
+        let id: String = row["id"]
         let year: Int = row["year"]
         let month: Int = row["month"]
         let summaryText: String = row["summary_text"]
         let happinessAvg: Double = row["happiness_avg"]
         let happinessCILower: Double = row["happiness_ci_lower"]
         let happinessCIUpper: Double = row["happiness_ci_upper"]
+        let generatedAt: Date = row["generated_at"]
 
-        let driversPositiveStr: String = row["drivers_positive"]
-        let driversNegativeStr: String = row["drivers_negative"]
-        let driversPositive = driversPositiveStr.split(separator: "|||").map(String.init)
-        let driversNegative = driversNegativeStr.split(separator: "|||").map(String.init)
-
+        let keyTopicsJSONStr: String = row["key_topics_json"]
+        let driversPositiveJSONStr: String = row["drivers_positive_json"]
+        let driversNegativeJSONStr: String = row["drivers_negative_json"]
         let topEventsJSONStr: String = row["top_events_json"]
         let sourceSpansJSONStr: String = row["source_spans_json"]
 
-        guard let topEventsData = topEventsJSONStr.data(using: .utf8),
+        guard let keyTopicsData = keyTopicsJSONStr.data(using: .utf8),
+              let driversPositiveData = driversPositiveJSONStr.data(using: .utf8),
+              let driversNegativeData = driversNegativeJSONStr.data(using: .utf8),
+              let topEventsData = topEventsJSONStr.data(using: .utf8),
               let sourceSpansData = sourceSpansJSONStr.data(using: .utf8) else {
             throw LifeOSDatabaseError.invalidJSON
         }
 
+        let keyTopics = try JSONDecoder().decode([String].self, from: keyTopicsData)
+        let driversPositive = try JSONDecoder().decode([String].self, from: driversPositiveData)
+        let driversNegative = try JSONDecoder().decode([String].self, from: driversNegativeData)
         let topEvents = try JSONDecoder().decode([DetectedEvent].self, from: topEventsData)
         let sourceSpans = try JSONDecoder().decode([SourceSpan].self, from: sourceSpansData)
 
         return MonthSummary(
+            id: UUID(uuidString: id) ?? UUID(),
             year: year,
             month: month,
             summaryText: summaryText,
+            keyTopics: keyTopics,
             happinessAvg: happinessAvg,
             happinessConfidenceInterval: (happinessCILower, happinessCIUpper),
             driversPositive: driversPositive,
             driversNegative: driversNegative,
             topEvents: topEvents,
-            sourceSpans: sourceSpans
+            sourceSpans: sourceSpans,
+            generatedAt: generatedAt
         )
     }
 }

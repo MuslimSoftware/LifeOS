@@ -12,7 +12,7 @@ import SwiftUI
 @MainActor
 class AnalyticsViewModel: ObservableObject {
     @Published var timeSeries: [TimeSeriesDataPoint] = []
-    @Published var selectedDateRange: DateInterval = Calendar.current.dateInterval(of: .month, for: Date())!
+    @Published var selectedDateRange: DateInterval
     @Published var isLoading: Bool = false
     @Published var error: Error?
     @Published var hasData: Bool = false
@@ -23,6 +23,11 @@ class AnalyticsViewModel: ObservableObject {
     init(calculator: HappinessIndexCalculator, analyticsRepository: EntryAnalyticsRepository) {
         self.calculator = calculator
         self.analyticsRepository = analyticsRepository
+
+        // Default to last 90 days instead of current month
+        let end = Date()
+        let start = Calendar.current.date(byAdding: .day, value: -90, to: end)!
+        self.selectedDateRange = DateInterval(start: start, end: end)
     }
 
     /// Load analytics data for the selected date range

@@ -9,6 +9,7 @@ import SwiftUI
 
 /// Message bubble with rich formatting and tool badges
 struct MessageBubbleView: View {
+    @Environment(\.theme) private var theme
     let message: ChatMessage
 
     var body: some View {
@@ -49,7 +50,7 @@ struct MessageBubbleView: View {
     }
 
     private var bubbleColor: Color {
-        message.role == .user ? Color.accentColor : Color(nsColor: .controlBackgroundColor)
+        message.role == .user ? Color.accentColor : theme.hoveredBackground
     }
 
     private var textColor: Color {

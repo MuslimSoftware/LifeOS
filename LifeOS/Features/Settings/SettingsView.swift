@@ -29,6 +29,7 @@ struct SettingsView: View {
     @State private var autoProcessingEnabled: Bool = false
 
     private let fileService = FileManagerService()
+    private let authManager = AuthenticationManager.shared
 
     var body: some View {
         HStack(spacing: 0) {
@@ -42,7 +43,8 @@ struct SettingsView: View {
         .frame(width: 750, height: 650)
         .background(theme.backgroundColor)
         .onAppear {
-            checkAPIKey()
+            // Use cached auth state instead of triggering another keychain access
+            isKeyStored = authManager.isAuthenticated
         }
     }
 
@@ -363,16 +365,12 @@ struct SettingsView: View {
         .padding(24)
     }
     
-    private func checkAPIKey() {
-        isKeyStored = KeychainService.shared.hasAPIKey()
-    }
-    
     private func saveAPIKey() {
         errorMessage = nil
         showSuccess = false
-        
+
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         guard !trimmedKey.isEmpty else {
             errorMessage = "Please enter an API key"
             return
@@ -388,28 +386,26 @@ struct SettingsView: View {
             return
         }
 
-        if KeychainService.shared.saveAPIKey(trimmedKey) {
+        // Use AuthenticationManager to save and cache the key
+        if authManager.saveAPIKey(trimmedKey) {
             isKeyStored = true
             showSuccess = true
             apiKey = ""
-
-            // Note: saveAPIKey() already caches the key, no need to invalidate
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 showSuccess = false
             }
         } else {
-            errorMessage = "Failed to save API key to Keychain"
+            errorMessage = authManager.authenticationError ?? "Failed to save API key to Keychain"
         }
     }
-    
+
     private func removeAPIKey() {
-        if KeychainService.shared.deleteAPIKey() {
+        // Use AuthenticationManager to remove the key
+        if authManager.removeAPIKey() {
             isKeyStored = false
             showSuccess = false
             errorMessage = nil
-
-            KeychainService.shared.invalidateCache()
         } else {
             errorMessage = "Failed to remove API key"
         }

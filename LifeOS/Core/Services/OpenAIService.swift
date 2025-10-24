@@ -47,7 +47,12 @@ class OpenAIService: OCRServiceProtocol {
     }
 
     private func getAPIKey() throws -> String {
-        // KeychainService now handles caching internally
+        // Use AuthenticationManager's cached key to avoid multiple keychain accesses
+        if let cachedKey = AuthenticationManager.shared.getCachedAPIKey() {
+            return cachedKey
+        }
+
+        // Fallback to direct keychain access (shouldn't happen if auth flow is correct)
         guard let key = apiKeyStorage.getAPIKey() else {
             throw OpenAIError.noAPIKey
         }

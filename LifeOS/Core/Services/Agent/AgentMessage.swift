@@ -80,6 +80,15 @@ enum AgentMessage: Codable {
             ]
 
         case .toolCall(let callId, let toolCall):
+            // OpenAI API requires arguments to be a JSON string, not an object
+            let argumentsString: String
+            if let argumentsData = try? JSONSerialization.data(withJSONObject: toolCall.arguments),
+               let string = String(data: argumentsData, encoding: .utf8) {
+                argumentsString = string
+            } else {
+                argumentsString = "{}" // Fallback to empty object
+            }
+
             return [
                 "role": "assistant",
                 "content": NSNull(),
@@ -89,7 +98,7 @@ enum AgentMessage: Codable {
                         "type": "function",
                         "function": [
                             "name": toolCall.name,
-                            "arguments": toolCall.arguments
+                            "arguments": argumentsString
                         ]
                     ]
                 ]
