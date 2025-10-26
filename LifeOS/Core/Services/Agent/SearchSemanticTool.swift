@@ -62,15 +62,34 @@ class SearchSemanticTool: AgentTool {
 
         // Generate embedding for the query
         let queryEmbedding = try await openAI.generateEmbedding(for: query)
+        print("🔍 [SearchSemantic] Query: '\(query)'")
+        print("🔍 [SearchSemantic] Generated embedding with \(queryEmbedding.count) dimensions")
+
+        // Prepare date range for filtering
+        let dateRange = (startDate != nil && endDate != nil) ? DateInterval(start: startDate!, end: endDate!) : nil
+
+        // Get chunk statistics for debugging
+        let allChunks = dateRange != nil
+            ? try chunkRepository.getChunks(from: dateRange!.start, to: dateRange!.end)
+            : try chunkRepository.getAllChunks()
+        let chunksWithEmbeddings = allChunks.filter { $0.embedding != nil }.count
+        print("🔍 [SearchSemantic] Total chunks: \(allChunks.count), with embeddings: \(chunksWithEmbeddings)")
 
         // Perform vector search
-        let dateRange = (startDate != nil && endDate != nil) ? DateInterval(start: startDate!, end: endDate!) : nil
         let results = try vectorSearch.searchSimilar(
             queryEmbedding: queryEmbedding,
             topK: limitedTopK,
             dateRange: dateRange,
-            minSimilarity: 0.5 // Only return reasonably relevant results
+            minSimilarity: 0.3 // Lower threshold to return more potentially relevant results
         )
+
+        print("🔍 [SearchSemantic] Found \(results.count) results")
+        if !results.isEmpty {
+            let topScores = results.prefix(3).map { String(format: "%.3f", $0.similarity) }.joined(separator: ", ")
+            print("🔍 [SearchSemantic] Top similarity scores: \(topScores)")
+        } else {
+            print("⚠️ [SearchSemantic] No results found. Check if journal entries have been processed and have embeddings.")
+        }
 
         // Format results for the agent
         let formattedResults: [[String: Any]] = results.map { result in
@@ -79,7 +98,7 @@ class SearchSemanticTool: AgentTool {
                 "text": result.chunk.text,
                 "date": isoFormatter.string(from: result.chunk.date),
                 "similarity": round(result.similarity * 1000) / 1000, // Round to 3 decimals
-                "entryId": result.chunk.entryId
+                "entryId": result.chunk.entryId.uuidString
             ]
         }
 

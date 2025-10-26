@@ -30,8 +30,8 @@ struct ChatInputView: View {
                 }
 
             Button(action: sendMessage) {
-                Image(systemName: "paperplane.fill")
-                    .font(.system(size: 20))
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 28))
                     .foregroundColor(canSend ? theme.primaryText : theme.primaryText.opacity(0.3))
             }
             .buttonStyle(.plain)
@@ -44,7 +44,7 @@ struct ChatInputView: View {
         .cornerRadius(20)
         .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 2)
         .padding(.horizontal, 20)
-        .padding(.bottom, 40)
+        .padding(.bottom, 12)
     }
 
     private var canSend: Bool {

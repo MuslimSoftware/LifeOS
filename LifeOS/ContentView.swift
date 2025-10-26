@@ -258,6 +258,16 @@ struct ContentView: View {
             let currentStateTool = GetCurrentStateSnapshotTool(analyzer: currentStateAnalyzer!)
             toolRegistry.registerTool(currentStateTool)
 
+            // 4. Month summary tool
+            let monthSummaryRepository = MonthSummaryRepository(dbService: databaseService!)
+            let monthSummaryTool = GetMonthSummaryTool(repository: monthSummaryRepository)
+            toolRegistry.registerTool(monthSummaryTool)
+
+            // 5. Year summary tool
+            let yearSummaryRepository = YearSummaryRepository(dbService: databaseService!)
+            let yearSummaryTool = GetYearSummaryTool(repository: yearSummaryRepository)
+            toolRegistry.registerTool(yearSummaryTool)
+
             // Initialize agent kernel
             let kernel = AgentKernel(
                 openAI: openAI,
