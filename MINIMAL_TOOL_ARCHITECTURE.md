@@ -1,8 +1,8 @@
 # AI Chat Agent Refactor: Minimal Tool Architecture
 
 **Version**: 2.0
-**Date**: October 26, 2025
-**Status**: ✅ Phase 1 Complete | 🚧 Phase 2 In Progress
+**Date**: October 27, 2025
+**Status**: ✅ Phase 1 Complete | ✅ Phase 2 Complete | ✅ Phase 3 Complete | 🚧 Phase 4 Next
 **Previous Architecture**: See `AI_CHAT_AGENT_ARCHITECTURE.md`
 
 ---
@@ -25,10 +25,27 @@
 - ✅ Fixes temporal hallucinations ("latest entry" now accurate)
 - ✅ Universal retrieve tool replaces 5 specialized tools
 
-### Phase 2: Core `analyze` Tool 🚧 PLANNED
-- **Status**: Not started
-- **Target**: Implement lifelong_patterns, decision_matrix, action_synthesis operations
-- **Dependencies**: Phase 1 complete ✅
+### Phase 2: Core `analyze` Tool ✅ COMPLETE
+- **Status**: Implemented and building successfully
+- **Date Completed**: October 26, 2025
+- **Files Created**: 8 new files (~1,416 LOC)
+- **Files Modified**: 5 files
+- **Build Status**: ✅ Success
+- **Net Impact**: 3 priority analyzers + dynamic token budgeting + result caching
+
+**Key Achievements**:
+- ✅ LifelongPatternsAnalyzer - Detects recurring themes across entire history
+- ✅ DecisionMatrixAnalyzer - Structured decision support with criteria scoring
+- ✅ ActionSynthesisAnalyzer - Generates actionable todos from current state
+- ✅ TokenBudgetManager - Dynamic token selection to prevent rate limit errors
+- ✅ ResultCacheService - Lightweight summaries prevent 429 errors (55K→500 tokens)
+- ✅ User-configurable token limits in Settings UI
+
+### Phase 3: Agent Kernel Refactor ✅ COMPLETE
+- **Status**: Completed October 27, 2025
+- **Target**: Remove old tools, clean up deprecated UI/services
+- **Dependencies**: Phase 1 ✅ & Phase 2 ✅ complete
+- **Outcome**: Deleted Insights UI (6 files), CurrentStateAnalyzer, cleaned ContentView
 
 ---
 
@@ -106,6 +123,83 @@
 5. ~~`GetCurrentStateSnapshotTool.swift`~~ (~190 LOC)
 
 **Total Deleted**: ~600 LOC
+
+---
+
+## 📁 Phase 2 Implementation Files
+
+### Files Created (8 new files)
+
+1. **AnalyzeTool.swift** (~175 LOC)
+   - `LifeOS/Core/Services/Agent/AnalyzeTool.swift`
+   - Universal analysis router
+   - Supports result ID resolution from cache
+   - Routes to specialized analyzers
+
+2. **Three Priority Analyzers** (~970 LOC)
+   - `LifeOS/Core/Services/Agent/Analysis/LifelongPatternsAnalyzer.swift` (~324 LOC)
+     - Detects recurring themes across entire journal history
+     - Identifies flare-up windows, triggers, protective factors
+     - Uses TokenBudgetManager to fit within user's rate limits
+   - `LifeOS/Core/Services/Agent/Analysis/DecisionMatrixAnalyzer.swift` (~325 LOC)
+     - Structured decision support with criteria-based scoring
+     - Pros/cons/risks analysis with evidence from journal
+     - Optional counterfactual analysis
+   - `LifeOS/Core/Services/Agent/Analysis/ActionSynthesisAnalyzer.swift` (~321 LOC)
+     - Generates actionable todos from current state
+     - Balanced across life areas (health, work, relationships)
+     - Includes first step, effort estimates, impact scoring
+
+3. **AnalysisResult.swift** (~80 LOC)
+   - `LifeOS/Core/Models/Agent/AnalysisResult.swift`
+   - Generic result structure for all analyze operations
+   - Confidence scoring, execution metadata
+   - Consistent JSON format for OpenAI
+
+4. **TokenBudgetManager.swift** (~134 LOC)
+   - `LifeOS/Core/Services/Agent/TokenBudgetManager.swift`
+   - Dynamic token estimation (1 token ≈ 4 characters)
+   - Selects entries that fit within user's TPM limit
+   - Operation-specific budgets (lifelong_patterns: 90%, action_synthesis: 40%)
+   - User-configurable via Settings (default 30K)
+   - Detailed logging for debugging
+
+5. **ResultCacheService.swift** (~57 LOC)
+   - `LifeOS/Core/Services/Agent/ResultCacheService.swift`
+   - Singleton cache for large tool results
+   - Thread-safe with NSLock
+   - Prevents token overflow (retrieve: 55K tokens → 500 token summary)
+
+### Files Modified (5 files)
+
+1. **ToolRegistry.swift** (~5 LOC changed)
+   - `LifeOS/Core/Services/Agent/ToolRegistry.swift`
+   - Registered AnalyzeTool alongside RetrieveTool
+
+2. **AgentKernel.swift** (~60 LOC changed)
+   - `LifeOS/Core/Services/Agent/AgentKernel.swift`
+   - Added result caching on tool execution
+   - Detects retrieve results (has "items" + "metadata")
+   - Caches full data, returns lightweight summary
+   - Prevents 429 rate limit errors from large results
+
+3. **RetrieveResult.swift** (~40 LOC added)
+   - `LifeOS/Core/Models/Agent/RetrieveResult.swift`
+   - Added `toSummaryJSON()` method
+   - Returns ~500 token summary instead of full 55K data
+   - Includes count, metadata, preview of first 2 items
+
+4. **AnalyzeTool.swift** (~35 LOC changed)
+   - Added result ID resolution from ResultCacheService
+   - Supports both string IDs (e.g., ["retrieve_1"]) and direct data
+   - Updated parameter schema to accept anyOf string/object
+
+5. **SettingsView.swift** (~40 LOC added)
+   - `LifeOS/Features/Settings/SettingsView.swift`
+   - Added "AI Analysis Settings" section
+   - User-configurable max tokens per request
+   - Input validation (5K-200K range)
+   - Reset to default button
 
 ---
 
@@ -1126,41 +1220,42 @@ Based on **{count}** journal entries from **{dateRange}**, here's what I found:
 - ✅ Hybrid ranking algorithm implemented
 - ⏳ Unit tests (TODO for Phase 1.5)
 
-### Phase 2: Core `analyze` Tool (Week 2)
+### Phase 2: Core `analyze` Tool ✅ COMPLETE
 
-**Files to create**:
-- `LifeOS/Core/Services/Agent/Tools/AnalyzeTool.swift`
-- `LifeOS/Core/Services/Agent/Analysis/LifelongPatternsAnalyzer.swift`
-- `LifeOS/Core/Services/Agent/Analysis/DecisionMatrixAnalyzer.swift`
-- `LifeOS/Core/Services/Agent/Analysis/ActionSynthesisAnalyzer.swift`
-- `LifeOS/Core/Models/Agent/AnalysisResult.swift`
+**Completion Date**: October 26, 2025
+**Build Status**: ✅ Success
 
-**Steps**:
-1. Create `AnalyzeTool` class with operation router
-2. Implement 3 priority analyzers:
-   - `lifelong_patterns`
-   - `decision_matrix`
-   - `action_synthesis`
-3. Define JSON schemas for each operation
-4. Add caching layer for deterministic operations
-5. Add unit tests for each analyzer
-6. Register in `ToolRegistry`
+**Files created**:
+- ✅ `LifeOS/Core/Services/Agent/AnalyzeTool.swift` (175 LOC)
+- ✅ `LifeOS/Core/Services/Agent/Analysis/LifelongPatternsAnalyzer.swift` (324 LOC)
+- ✅ `LifeOS/Core/Services/Agent/Analysis/DecisionMatrixAnalyzer.swift` (325 LOC)
+- ✅ `LifeOS/Core/Services/Agent/Analysis/ActionSynthesisAnalyzer.swift` (321 LOC)
+- ✅ `LifeOS/Core/Models/Agent/AnalysisResult.swift` (80 LOC)
+- ✅ `LifeOS/Core/Services/Agent/TokenBudgetManager.swift` (134 LOC) - **BONUS**
+- ✅ `LifeOS/Core/Services/Agent/ResultCacheService.swift` (57 LOC) - **BONUS**
 
-**Testing**:
-```swift
-// Test: Lifelong patterns
-let chunks = // load test data
-let result = try await analyze.execute(arguments: [
-    "op": "lifelong_patterns",
-    "inputs": [chunks],
-    "config": [
-        "minOccurrences": 3,
-        "minSpanMonths": 6
-    ]
-])
-XCTAssertEqual(result.op, "lifelong_patterns")
-XCTAssertGreaterThan(result.results.count, 0)
-```
+**Files modified**:
+- ✅ `ToolRegistry.swift` - Registered AnalyzeTool
+- ✅ `AgentKernel.swift` - Added result caching
+- ✅ `RetrieveResult.swift` - Added summary methods
+- ✅ `SettingsView.swift` - Added token limit configuration
+- ✅ `AnalyzeTool.swift` - Added result ID resolution
+
+**Steps completed**:
+1. ✅ Create `AnalyzeTool` class with operation router
+2. ✅ Implement 3 priority analyzers (lifelong_patterns, decision_matrix, action_synthesis)
+3. ✅ Define JSON schemas for each operation
+4. ✅ Add dynamic token budgeting system (prevents 429 errors)
+5. ✅ Add result caching to prevent token overflow (55K→500 tokens)
+6. ✅ Register in `ToolRegistry`
+7. ⏳ Unit tests (TODO Phase 2.5)
+
+**Testing** (Manual verification complete):
+- ✅ Build succeeds with no errors
+- ✅ All 3 analyzers use TokenBudgetManager
+- ✅ Result caching prevents 429 rate limit errors
+- ✅ Settings UI allows user configuration
+- ⏳ Unit tests (TODO for Phase 2.5)
 
 ### Phase 3: Agent Kernel Refactor (Week 3)
 
@@ -1929,35 +2024,54 @@ class AnalyzeTool: AgentTool {
 6. ✅ ~~Build succeeds with no errors~~
 7. ⏳ Unit tests (TODO Phase 1.5)
 
-### 🚧 Phase 2: Next Priority (Current)
+### ✅ Phase 2 Complete (October 26, 2025)
+1. ✅ ~~Create AnalyzeTool with operation router~~
+2. ✅ ~~Implement LifelongPatternsAnalyzer~~
+3. ✅ ~~Implement DecisionMatrixAnalyzer~~
+4. ✅ ~~Implement ActionSynthesisAnalyzer~~
+5. ✅ ~~Add TokenBudgetManager for dynamic token selection~~
+6. ✅ ~~Add ResultCacheService to prevent 429 errors~~
+7. ✅ ~~Add Settings UI for token limit configuration~~
+8. ✅ ~~Build succeeds with no errors~~
+9. ⏳ Unit tests (TODO Phase 2.5)
 
-**Goal**: Implement `analyze` tool for advanced analytics
+### ✅ Phase 3 Complete (October 27, 2025)
+- **Status**: Completed
+- **Date Completed**: October 27, 2025
 
-**Tasks**:
-1. **Create AnalyzeTool.swift** - Operation router with caching
-2. **Implement 3 priority analyzers**:
-   - `lifelong_patterns` - Recurring themes across entire history
-   - `decision_matrix` - Structured decision support
-   - `action_synthesis` - Generate actionable todos from themes
-3. **Define JSON schemas** for each operation
-4. **Add to ToolRegistry** alongside retrieve tool
-5. **Test end-to-end** queries like "What should I do?" and "What have I always struggled with?"
+**Completed Tasks**:
+1. ✅ ~~Deleted all Insights UI components~~ (Features/Insights/ directory)
+   - Removed CurrentStateDashboardView.swift
+   - Removed CurrentStateDashboardViewModel.swift
+   - Removed MoodGaugeView.swift
+   - Removed ThemeChipsView.swift
+   - Removed StressorsProtectiveView.swift
+   - Removed AISuggestedTodosView.swift
+2. ✅ ~~Deleted CurrentStateAnalyzer.swift~~
+3. ✅ ~~Cleaned up ContentView.swift~~
+   - Removed all analytics service initialization code
+   - Removed references to happinessCalculator, analyticsRepository, currentStateAnalyzer
+   - Simplified to only initialize databaseService and agentKernel
+4. ✅ ~~Verified build succeeds with no errors~~
 
-**Timeline**: ~1 week
+**Notes**:
+- Old tools were already deleted in Phase 1 ✅
+- ToolRegistry already only has RetrieveTool + AnalyzeTool ✅
+- System prompt already updated in Phase 1 ✅
+- AgentPlanner and warm-start logic deferred to Phase 4
 
-**Files to create**:
-- `AnalyzeTool.swift` (~200 LOC)
-- `LifelongPatternsAnalyzer.swift` (~180 LOC)
-- `DecisionMatrixAnalyzer.swift` (~150 LOC)
-- `ActionSynthesisAnalyzer.swift` (~120 LOC)
-- `AnalysisResult.swift` model (~80 LOC)
+**Net Impact**:
+- Deleted 6 UI files
+- Deleted 1 service file (CurrentStateAnalyzer)
+- Cleaned up ContentView initialization
+- Codebase now fully aligned with minimal tool architecture
 
-### Phase 3-5: Future Work
-- **Phase 3**: Agent Planner (intent classification)
-- **Phase 4**: Memory & Context Bundle
-- **Phase 5**: UI enhancements (confidence badges, provenance display)
+### 🚧 Phase 4-5: Future Work (Next Priority)
+- **Phase 4**: Memory & Context Bundle (persistent insights, saved patterns)
+- **Phase 5**: UI enhancements (confidence badges, provenance display, memory viewer)
+- **Optional**: AgentPlanner for intelligent query routing
 
-**Overall Status**: 1/5 phases complete (20%)
+**Overall Status**: 3/5 phases complete (60%)
 
 ---
 

@@ -13,10 +13,7 @@ struct ContentView: View {
 
     // Analytics & AI services
     @State private var databaseService: DatabaseService?
-    @State private var happinessCalculator: HappinessIndexCalculator?
-    @State private var analyticsRepository: EntryAnalyticsRepository?
     @State private var agentKernel: AgentKernel?
-    @State private var currentStateAnalyzer: CurrentStateAnalyzer?
 
     // Authentication
     @State private var authManager = AuthenticationManager.shared
@@ -33,9 +30,8 @@ struct ContentView: View {
                         await authManager.checkAuthentication()
                         hasCheckedAuth = true
 
-                        // Initialize analytics services after auth check completes (if authenticated)
+                        // Initialize AI services after auth check completes (if authenticated)
                         if authManager.isAuthenticated {
-                            initializeAnalyticsServices()
                             initializeAIServices()
                         }
                     }
@@ -98,8 +94,7 @@ struct ContentView: View {
         .preferredColorScheme(settings.colorScheme)
         .onReceive(NotificationCenter.default.publisher(for: .authenticationDidChange)) { _ in
             // Reinitialize services when API key is added/changed
-            print("🔄 Auth changed, reinitializing analytics services...")
-            initializeAnalyticsServices()
+            print("🔄 Auth changed, reinitializing AI services...")
             initializeAIServices()
         }
     }
@@ -170,40 +165,6 @@ struct ContentView: View {
         self.entryListViewModel = entryListVM
     }
 
-    private func initializeAnalyticsServices() {
-        guard happinessCalculator == nil || analyticsRepository == nil || currentStateAnalyzer == nil else { return }
-
-        do {
-            // Initialize database service
-            let dbService = DatabaseService.shared
-            try dbService.initialize()
-            self.databaseService = dbService
-            print("✅ Database initialized successfully")
-
-            // Initialize happiness calculator
-            let calculator = HappinessIndexCalculator()
-            self.happinessCalculator = calculator
-
-            // Initialize analytics repository
-            let repository = EntryAnalyticsRepository(dbService: dbService)
-            self.analyticsRepository = repository
-
-            // Initialize current state analyzer
-            let openAI = OpenAIService()
-            let analyzer = CurrentStateAnalyzer(
-                repository: repository,
-                calculator: calculator,
-                openAI: openAI
-            )
-            self.currentStateAnalyzer = analyzer
-
-            print("✅ Analytics services initialized successfully")
-        } catch {
-            print("❌ Failed to initialize analytics services: \(error.localizedDescription)")
-            // Services remain nil, views will show appropriate empty/error states
-        }
-    }
-
     private func initializeAIServices() {
         guard agentKernel == nil else { return }
 
@@ -217,19 +178,6 @@ struct ContentView: View {
                 try dbService.initialize()
                 databaseService = dbService
                 print("✅ Database initialized for AI services")
-            }
-            if analyticsRepository == nil {
-                analyticsRepository = EntryAnalyticsRepository(dbService: databaseService!)
-            }
-            if happinessCalculator == nil {
-                happinessCalculator = HappinessIndexCalculator()
-            }
-            if currentStateAnalyzer == nil {
-                currentStateAnalyzer = CurrentStateAnalyzer(
-                    repository: analyticsRepository!,
-                    calculator: happinessCalculator!,
-                    openAI: openAI
-                )
             }
 
             // Create tool registry with new minimal tools
