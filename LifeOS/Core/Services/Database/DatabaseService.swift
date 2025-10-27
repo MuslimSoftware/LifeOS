@@ -211,6 +211,39 @@ class DatabaseService {
             print("✅ FTS5 virtual table and triggers created")
         }
 
+        // Migration v3: Add agent memory table
+        migrator.registerMigration("v3_agent_memory") { db in
+            // Create agent memory table
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS agent_memory (
+                    id TEXT PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    tags_json TEXT,
+                    related_ids_json TEXT,
+                    confidence TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    last_accessed DATETIME,
+                    access_count INTEGER DEFAULT 0
+                );
+            """)
+
+            // Create indices for efficient querying
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS idx_memory_kind ON agent_memory(kind);
+            """)
+
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS idx_memory_created ON agent_memory(created_at);
+            """)
+
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS idx_memory_accessed ON agent_memory(last_accessed);
+            """)
+
+            print("✅ Agent memory table and indices created")
+        }
+
         do {
             try migrator.migrate(dbQueue)
             print("✅ Database migrations completed")

@@ -14,6 +14,7 @@ struct RetrieveQuery {
         case chunks
         case analytics
         case summaries
+        case memory
     }
 
     enum Sort: String, Codable {

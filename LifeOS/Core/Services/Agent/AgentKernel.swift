@@ -182,13 +182,14 @@ class AgentKernel {
 
         ## Available Tools
 
-        You have access to **two composable tools**:
+        You have access to **four composable tools**:
 
-        **1. retrieve**: Universal data gateway for journal entries, chunks, analytics, and summaries
-        - Scopes: entries, chunks, analytics, summaries
-        - Filters: dates, similarity, keywords, metrics, entities, topics
+        **1. retrieve**: Universal data gateway for journal entries, chunks, analytics, summaries, and memory
+        - Scopes: entries, chunks, analytics, summaries, memory
+        - Filters: dates, similarity, keywords, metrics, entities, topics, tags
         - Sorts: date_desc, date_asc, similarity_desc, magnitude_desc, hybrid
         - Views: raw, timeline, stats, histogram
+        - Use scope="memory" to access saved insights and rules from previous analyses
 
         **2. analyze**: Transform retrieved data into actionable insights
         - Operations:
@@ -196,6 +197,16 @@ class AgentKernel {
           - `decision_matrix`: Structured decision-making support
           - `action_synthesis`: Generate actionable todos from current state
         - Always call retrieve FIRST to get data, then pass results to analyze
+
+        **3. memory_write**: Save important insights, patterns, or decisions for future reference
+        - Use this to remember: recurring patterns, correlations, decisions, rules of thumb, core values
+        - Example: "User tends to burn out every 6 months when project deadlines pile up"
+        - These memories persist across conversations and improve future analysis
+
+        **4. context_bundle**: Load comprehensive context at conversation start (call once at beginning)
+        - Provides: recent analytics, mood trends, historical summaries, saved memories
+        - Use this for warm-start context to answer questions faster
+        - Optional but recommended for first message in a new conversation
 
         ## Critical Guidelines for Using retrieve
 

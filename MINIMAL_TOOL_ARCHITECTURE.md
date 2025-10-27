@@ -2,7 +2,7 @@
 
 **Version**: 2.0
 **Date**: October 27, 2025
-**Status**: ✅ Phase 1 Complete | ✅ Phase 2 Complete | ✅ Phase 3 Complete | 🚧 Phase 4 Next
+**Status**: ✅ Phase 1 Complete | ✅ Phase 2 Complete | ✅ Phase 3 Complete | ✅ Phase 4 Complete | 🚧 Phase 5 Next
 **Previous Architecture**: See `AI_CHAT_AGENT_ARCHITECTURE.md`
 
 ---
@@ -46,6 +46,12 @@
 - **Target**: Remove old tools, clean up deprecated UI/services
 - **Dependencies**: Phase 1 ✅ & Phase 2 ✅ complete
 - **Outcome**: Deleted Insights UI (6 files), CurrentStateAnalyzer, cleaned ContentView
+
+### Phase 4: Memory & Context Bundle ✅ COMPLETE
+- **Status**: Completed October 27, 2025
+- **Target**: Add persistent memory + conversation warm-start
+- **Dependencies**: Phase 1 ✅ & Phase 2 ✅ & Phase 3 ✅ complete
+- **Outcome**: Added memory_write & context_bundle tools, 4 new files (680 LOC)
 
 ---
 
@@ -2066,12 +2072,48 @@ class AnalyzeTool: AgentTool {
 - Cleaned up ContentView initialization
 - Codebase now fully aligned with minimal tool architecture
 
-### 🚧 Phase 4-5: Future Work (Next Priority)
-- **Phase 4**: Memory & Context Bundle (persistent insights, saved patterns)
+### ✅ Phase 4 Complete (October 27, 2025)
+- **Status**: Completed
+- **Date Completed**: October 27, 2025
+
+**Completed Tasks**:
+1. ✅ ~~Created AgentMemory model~~ (AgentMemory.swift - 170 LOC)
+2. ✅ ~~Added v3_agent_memory database migration~~ (agent_memory table with indices)
+3. ✅ ~~Implemented AgentMemoryRepository~~ (180 LOC - full CRUD + search)
+4. ✅ ~~Created MemoryWriteTool~~ (110 LOC - save insights/patterns/decisions)
+5. ✅ ~~Created ContextBundleTool~~ (220 LOC - warm-start context loading)
+6. ✅ ~~Updated RetrieveTool with memory scope~~ (added scope="memory" support)
+7. ✅ ~~Registered new tools in ToolRegistry~~ (memory_write + context_bundle)
+8. ✅ ~~Updated AgentKernel system prompt~~ (added memory tool documentation)
+9. ✅ ~~Verified build succeeds~~
+
+**New Capabilities**:
+- Agent can now save persistent memories across conversations
+- Agent can load comprehensive context bundles for faster responses
+- Memory retrieval via retrieve(scope="memory", filter={tags: [...]})
+- Automatic access tracking for memory usage analytics
+
+**Files Created**:
+- `AgentMemory.swift` (170 LOC)
+- `AgentMemoryRepository.swift` (180 LOC)
+- `MemoryWriteTool.swift` (110 LOC)
+- `ContextBundleTool.swift` (220 LOC)
+
+**Files Modified**:
+- `DatabaseService.swift` (added v3_agent_memory migration)
+- `RetrieveTool.swift` (added memory scope + 70 LOC)
+- `RetrieveQuery.swift` (added .memory scope)
+- `RankedItem.swift` (added memoryId to Provenance)
+- `ToolRegistry.swift` (registered new tools)
+- `AgentKernel.swift` (updated system prompt)
+
+**Net Impact**: +750 LOC
+
+### 🚧 Phase 5: Future Work (Next Priority)
 - **Phase 5**: UI enhancements (confidence badges, provenance display, memory viewer)
 - **Optional**: AgentPlanner for intelligent query routing
 
-**Overall Status**: 3/5 phases complete (60%)
+**Overall Status**: 4/5 phases complete (80%)
 
 ---
 

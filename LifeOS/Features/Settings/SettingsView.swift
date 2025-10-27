@@ -4,6 +4,7 @@ enum SettingsSection: String, CaseIterable {
     case openai = "OpenAI API"
     case backup = "Data Backup"
     case analytics = "Analytics"
+    case memories = "Memories"
 }
 
 struct SettingsView: View {
@@ -31,6 +32,7 @@ struct SettingsView: View {
         let stored = UserDefaults.standard.integer(forKey: TokenBudgetManager.maxTokensKey)
         return stored > 0 ? stored : TokenBudgetManager.defaultMaxTokens
     }()
+    @State private var memoryViewModel: MemoryManagementViewModel?
 
     private let fileService = FileManagerService()
     private let authManager = AuthenticationManager.shared
@@ -49,6 +51,18 @@ struct SettingsView: View {
         .onAppear {
             // Use cached auth state instead of triggering another keychain access
             isKeyStored = authManager.isAuthenticated
+
+            // Initialize memory view model
+            if memoryViewModel == nil {
+                do {
+                    let dbService = DatabaseService.shared
+                    try dbService.initialize()
+                    let repository = AgentMemoryRepository(dbService: dbService)
+                    memoryViewModel = MemoryManagementViewModel(repository: repository)
+                } catch {
+                    print("❌ Failed to initialize memory view model: \(error)")
+                }
+            }
         }
     }
 
@@ -133,6 +147,8 @@ struct SettingsView: View {
                     backupSection
                 case .analytics:
                     analyticsSection
+                case .memories:
+                    memoriesSection
                 }
             }
         }
@@ -789,6 +805,25 @@ struct SettingsView: View {
                 print("✅ Summaries recomputed successfully")
             } catch {
                 print("⚠️ Failed to recompute summaries: \(error)")
+            }
+        }
+    }
+
+    // MARK: - Memories Section
+
+    private var memoriesSection: some View {
+        Group {
+            if let viewModel = memoryViewModel {
+                MemoryManagementView(viewModel: viewModel)
+            } else {
+                VStack(spacing: 16) {
+                    ProgressView()
+                    Text("Loading memories...")
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.secondaryText)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 40)
             }
         }
     }

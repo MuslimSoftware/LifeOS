@@ -10,6 +10,7 @@ class RetrieveTool: AgentTool {
     private let analyticsRepository: EntryAnalyticsRepository
     private let monthSummaryRepository: MonthSummaryRepository
     private let yearSummaryRepository: YearSummaryRepository
+    private let memoryRepository: AgentMemoryRepository?
     private let openAI: OpenAIService
     private let bm25: BM25Service
     private let ranker: HybridRanker
@@ -19,8 +20,8 @@ class RetrieveTool: AgentTool {
         "properties": [
             "scope": [
                 "type": "string",
-                "enum": ["entries", "chunks", "analytics", "summaries"],
-                "description": "What type of data to retrieve"
+                "enum": ["entries", "chunks", "analytics", "summaries", "memory"],
+                "description": "What type of data to retrieve. Use 'memory' to access saved insights and rules."
             ],
             "filter": [
                 "type": "object",
@@ -112,6 +113,7 @@ class RetrieveTool: AgentTool {
         analyticsRepository: EntryAnalyticsRepository,
         monthSummaryRepository: MonthSummaryRepository,
         yearSummaryRepository: YearSummaryRepository,
+        memoryRepository: AgentMemoryRepository? = nil,
         openAI: OpenAIService,
         bm25: BM25Service
     ) {
@@ -119,6 +121,7 @@ class RetrieveTool: AgentTool {
         self.analyticsRepository = analyticsRepository
         self.monthSummaryRepository = monthSummaryRepository
         self.yearSummaryRepository = yearSummaryRepository
+        self.memoryRepository = memoryRepository
         self.openAI = openAI
         self.bm25 = bm25
         self.ranker = HybridRanker(openAI: openAI, bm25: bm25)
@@ -141,6 +144,8 @@ class RetrieveTool: AgentTool {
             result = try await retrieveAnalytics(query: query)
         case .summaries:
             result = try await retrieveSummaries(query: query)
+        case .memory:
+            result = try retrieveMemory(query: query)
         }
 
         print("🔍 [Retrieve] Found \(result.metadata.count) results (confidence: \(result.metadata.confidence))")
@@ -257,7 +262,8 @@ class RetrieveTool: AgentTool {
                     source: "summaries",
                     entryId: nil,
                     chunkId: nil,
-                    analyticsId: nil
+                    analyticsId: nil,
+                    memoryId: nil
                 )
             )
         }.sorted { $0.date > $1.date }
@@ -288,7 +294,8 @@ class RetrieveTool: AgentTool {
                     source: "summaries",
                     entryId: nil,
                     chunkId: nil,
-                    analyticsId: nil
+                    analyticsId: nil,
+                    memoryId: nil
                 )
             )
         }.sorted { $0.date > $1.date }
@@ -392,7 +399,8 @@ class RetrieveTool: AgentTool {
                     source: "analytics",
                     entryId: item.entryId.uuidString,
                     chunkId: nil,
-                    analyticsId: item.id.uuidString
+                    analyticsId: item.id.uuidString,
+                    memoryId: nil
                 )
             )
         }
@@ -432,7 +440,8 @@ class RetrieveTool: AgentTool {
                 source: "analytics",
                 entryId: nil,
                 chunkId: nil,
-                analyticsId: nil
+                analyticsId: nil,
+                    memoryId: nil
             )
         )
 
@@ -442,6 +451,67 @@ class RetrieveTool: AgentTool {
     private func buildHistogramView(analytics: [EntryAnalytics], query: RetrieveQuery) -> RetrieveResult {
         // For now, return empty - can implement histogram bucketing later
         return RetrieveResult.empty(reason: "Histogram view not yet implemented")
+    }
+
+    private func retrieveMemory(query: RetrieveQuery) throws -> RetrieveResult {
+        guard let memoryRepo = memoryRepository else {
+            return RetrieveResult.empty(reason: "Memory repository not available")
+        }
+
+        // 1. Fetch memories based on filters
+        var memories: [AgentMemory] = []
+
+        if let tags = query.filter?.topics, !tags.isEmpty {
+            // Search by tags (topics field maps to tags)
+            memories = try memoryRepo.findByTags(tags)
+        } else if let dateFrom = query.filter?.dateFrom, let dateTo = query.filter?.dateTo {
+            // Search by date range
+            memories = try memoryRepo.findByDateRange(from: dateFrom, to: dateTo)
+        } else {
+            // Get recent memories
+            memories = try memoryRepo.getRecent(limit: query.limit)
+        }
+
+        // 2. Sort memories
+        switch query.sort {
+        case .dateDesc:
+            memories.sort { $0.createdAt > $1.createdAt }
+        case .dateAsc:
+            memories.sort { $0.createdAt < $1.createdAt }
+        default:
+            // Default to most recent first
+            memories.sort { $0.createdAt > $1.createdAt }
+        }
+
+        // 3. Limit results
+        let limitedMemories = Array(memories.prefix(query.limit))
+
+        // 4. Update access times
+        for memory in limitedMemories {
+            try? memoryRepo.updateAccessTime(memory.id)
+        }
+
+        // 5. Convert to RankedItems
+        let items = limitedMemories.map { memory -> RankedItem in
+            let provenance = RankedItem.Provenance(
+                source: "memory",
+                entryId: nil,
+                chunkId: nil,
+                analyticsId: nil,
+                memoryId: memory.id
+            )
+
+            return RankedItem(
+                id: memory.id,
+                date: memory.createdAt,
+                text: memory.content,
+                score: 1.0,
+                components: RankedItem.ScoreComponents(),
+                provenance: provenance
+            )
+        }
+
+        return RetrieveResult.build(items: items)
     }
 }
 
