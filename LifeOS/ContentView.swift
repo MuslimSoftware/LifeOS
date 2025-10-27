@@ -211,9 +211,6 @@ struct ContentView: View {
             // Initialize OpenAI service
             let openAI = OpenAIService()
 
-            // Initialize tool registry
-            let toolRegistry = ToolRegistry()
-
             // Initialize database service if needed
             if databaseService == nil {
                 let dbService = DatabaseService.shared
@@ -235,38 +232,11 @@ struct ContentView: View {
                 )
             }
 
-            // Register tools for the agent
-
-            // 1. Semantic search tool
-            let chunkRepository = ChunkRepository(dbService: databaseService!)
-            let vectorSearch = VectorSearchService(chunkRepository: chunkRepository)
-            let searchTool = SearchSemanticTool(
-                vectorSearch: vectorSearch,
-                chunkRepository: chunkRepository,
+            // Create tool registry with new minimal tools
+            let toolRegistry = ToolRegistry.createStandardRegistry(
+                databaseService: databaseService!,
                 openAI: openAI
             )
-            toolRegistry.registerTool(searchTool)
-
-            // 2. Time series tool
-            let timeSeriesTool = GetTimeSeriesTool(
-                calculator: happinessCalculator!,
-                repository: analyticsRepository!
-            )
-            toolRegistry.registerTool(timeSeriesTool)
-
-            // 3. Current state snapshot tool
-            let currentStateTool = GetCurrentStateSnapshotTool(analyzer: currentStateAnalyzer!)
-            toolRegistry.registerTool(currentStateTool)
-
-            // 4. Month summary tool
-            let monthSummaryRepository = MonthSummaryRepository(dbService: databaseService!)
-            let monthSummaryTool = GetMonthSummaryTool(repository: monthSummaryRepository)
-            toolRegistry.registerTool(monthSummaryTool)
-
-            // 5. Year summary tool
-            let yearSummaryRepository = YearSummaryRepository(dbService: databaseService!)
-            let yearSummaryTool = GetYearSummaryTool(repository: yearSummaryRepository)
-            toolRegistry.registerTool(yearSummaryTool)
 
             // Initialize agent kernel
             let kernel = AgentKernel(

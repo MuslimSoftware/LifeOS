@@ -341,6 +341,12 @@ class OpenAIService: OCRServiceProtocol {
         if let httpResponse = response as? HTTPURLResponse {
             guard httpResponse.statusCode == 200 else {
                 let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                Self.logAPIError(
+                    context: "Chat Completion (Structured Output)",
+                    statusCode: httpResponse.statusCode,
+                    errorBody: errorMessage,
+                    model: model
+                )
                 throw OpenAIError.networkError("Status \(httpResponse.statusCode): \(errorMessage)")
             }
         }
@@ -428,6 +434,28 @@ class OpenAIService: OCRServiceProtocol {
             toolCalls: toolCalls.isEmpty ? nil : toolCalls,
             finishReason: finishReason
         )
+    }
+
+    // MARK: - Error Logging
+
+    /// Log OpenAI API errors in a copy-pasteable format
+    static func logAPIError(
+        context: String,
+        statusCode: Int,
+        errorBody: String,
+        model: String
+    ) {
+        print("\n❌ ═══════════════════════════════════════════════════════════")
+        print("❌ OpenAI API Error")
+        print("❌ ═══════════════════════════════════════════════════════════")
+        print("❌ Context: \(context)")
+        print("❌ Model: \(model)")
+        print("❌ Status Code: \(statusCode)")
+        print("❌ ───────────────────────────────────────────────────────────")
+        print("❌ Error Response (copy-pasteable):")
+        print("❌")
+        print(errorBody)
+        print("❌ ═══════════════════════════════════════════════════════════\n")
     }
 }
 

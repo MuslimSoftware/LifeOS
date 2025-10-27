@@ -78,7 +78,7 @@ enum ToolRegistryError: Error, LocalizedError {
 // MARK: - Convenience Initializer
 
 extension ToolRegistry {
-    /// Create a fully configured tool registry with all standard tools
+    /// Create a fully configured tool registry with minimal composable tools
     /// - Parameters:
     ///   - databaseService: The database service for repositories
     ///   - openAI: The OpenAI service
@@ -96,37 +96,20 @@ extension ToolRegistry {
         let yearSummaryRepository = YearSummaryRepository(dbService: databaseService)
 
         // Create services
-        let vectorSearch = VectorSearchService(chunkRepository: chunkRepository)
-        let calculator = HappinessIndexCalculator()
-        let analyzer = CurrentStateAnalyzer(
-            repository: entryAnalyticsRepository,
-            calculator: calculator,
-            openAI: openAI
-        )
+        let bm25 = BM25Service(dbService: databaseService)
 
-        // Register all tools
-        registry.registerTool(SearchSemanticTool(
-            vectorSearch: vectorSearch,
+        // Register retrieve tool (replaces 5 old tools)
+        registry.registerTool(RetrieveTool(
             chunkRepository: chunkRepository,
-            openAI: openAI
+            analyticsRepository: entryAnalyticsRepository,
+            monthSummaryRepository: monthSummaryRepository,
+            yearSummaryRepository: yearSummaryRepository,
+            openAI: openAI,
+            bm25: bm25
         ))
 
-        registry.registerTool(GetMonthSummaryTool(
-            repository: monthSummaryRepository
-        ))
-
-        registry.registerTool(GetYearSummaryTool(
-            repository: yearSummaryRepository
-        ))
-
-        registry.registerTool(GetTimeSeriesTool(
-            calculator: calculator,
-            repository: entryAnalyticsRepository
-        ))
-
-        registry.registerTool(GetCurrentStateSnapshotTool(
-            analyzer: analyzer
-        ))
+        // Register analyze tool (Phase 2)
+        registry.registerTool(AnalyzeTool(openAI: openAI))
 
         return registry
     }

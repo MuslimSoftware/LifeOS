@@ -7,6 +7,7 @@ class AgentKernel {
     private let maxIterations: Int
     private let model: String
 
+
     init(
         openAI: OpenAIService,
         toolRegistry: ToolRegistry,
@@ -82,8 +83,26 @@ class AgentKernel {
                             arguments: arguments
                         )
 
+                        // Check if this is a retrieve result (has items + metadata structure)
+                        // If so, cache full result and return lightweight summary to prevent token overflow
+                        let resultToSend: Any
+                        if let resultDict = result as? [String: Any],
+                           resultDict["items"] != nil,
+                           resultDict["metadata"] != nil {
+                            // This is a retrieve result - cache it using shared service
+                            let resultId = ResultCacheService.shared.store(result: result)
+
+                            // Create lightweight summary
+                            resultToSend = createRetrieveSummary(result: resultDict, resultId: resultId)
+
+                            print("💾 [AgentKernel] Cached retrieve result '\(resultId)' (full data preserved for analyze)")
+                        } else {
+                            // Regular result - send as-is
+                            resultToSend = result
+                        }
+
                         // Serialize result to JSON
-                        let jsonData = try JSONSerialization.data(withJSONObject: result, options: .prettyPrinted)
+                        let jsonData = try JSONSerialization.data(withJSONObject: resultToSend, options: .prettyPrinted)
                         let resultString = String(data: jsonData, encoding: .utf8) ?? "{}"
 
                         // Add tool result to conversation
@@ -163,48 +182,113 @@ class AgentKernel {
 
         ## Available Tools
 
-        You have access to the following tools:
+        You have access to **two composable tools**:
 
-        1. **search_semantic**: Search through journal entries using natural language
-           - Use when the user asks about past experiences, feelings, or memories
-           - Example: "When did I last feel anxious about work?"
+        **1. retrieve**: Universal data gateway for journal entries, chunks, analytics, and summaries
+        - Scopes: entries, chunks, analytics, summaries
+        - Filters: dates, similarity, keywords, metrics, entities, topics
+        - Sorts: date_desc, date_asc, similarity_desc, magnitude_desc, hybrid
+        - Views: raw, timeline, stats, histogram
 
-        2. **get_month_summary**: Get AI-generated summary for a specific month
-           - Use when the user asks about "how was [month]" or wants an overview
-           - Returns narrative, positive/negative drivers, top events, happiness stats
+        **2. analyze**: Transform retrieved data into actionable insights
+        - Operations:
+          - `lifelong_patterns`: Detect recurring themes across entire history
+          - `decision_matrix`: Structured decision-making support
+          - `action_synthesis`: Generate actionable todos from current state
+        - Always call retrieve FIRST to get data, then pass results to analyze
 
-        3. **get_year_summary**: Get year-in-review summary
-           - Use for annual reflections or "how was [year]"
+        ## Critical Guidelines for Using retrieve
 
-        4. **get_time_series**: Get happiness/stress/energy trends over time
-           - Use when user asks about trends, patterns, or "how have I been feeling"
-           - Can show happiness, stress, or energy metrics
+        ### Temporal Queries (VERY IMPORTANT)
+        - ❌ NEVER use similarTo for "latest", "recent", "yesterday", "last entry"
+        - ✅ ALWAYS use sort="date_desc" + limit for recency queries
+        - ✅ Set recencyHalfLife=21 for "current state" questions
+        - ✅ Set recencyHalfLife=9999 for "lifelong" or "always" questions
 
-        5. **get_current_state**: Analyze current life state with themes, mood, and suggested actions
-           - Use when user asks "how am I doing?" or wants actionable advice
-           - Returns themes, stressors, protective factors, and AI-suggested todos
+        ### Query Examples
 
-        ## Guidelines
+        **"What was my last entry?"**
+        ```
+        retrieve(scope="entries", sort="date_desc", limit=1)
+        ```
 
-        - Be warm, empathetic, and non-judgmental
-        - Use tools proactively to provide evidence-based insights
-        - When sharing journal excerpts, be respectful and thoughtful
-        - Provide actionable suggestions when appropriate
-        - If uncertain, use semantic search to find relevant context
-        - Keep responses concise but insightful (2-4 paragraphs)
-        - Use specific examples and data from the journal when available
+        **"What did I write yesterday?"**
+        ```
+        retrieve(scope="chunks", filter={dateFrom: "YESTERDAY", dateTo: "YESTERDAY"}, sort="date_desc")
+        ```
+
+        **"Times I felt grateful"**
+        ```
+        retrieve(scope="chunks", filter={similarTo: "felt grateful, gratitude, thankful", recencyHalfLife: 60}, limit=10)
+        ```
+
+        **"How have I been feeling this month?"**
+        ```
+        retrieve(scope="analytics", filter={dateFrom: "MONTH_START", metric: "happiness"}, view="timeline")
+        ```
+
+        **"How was October?"**
+        ```
+        retrieve(scope="summaries", filter={dateFrom: "2025-10-01", dateTo: "2025-10-31", timeGranularity: "month"})
+        ```
+
+        **"What have I always struggled with?"**
+        ```
+        Step 1: retrieve(scope="chunks", filter={similarTo: "struggles, difficulties, chronic problems", recencyHalfLife: 9999}, limit=200)
+        Step 2: analyze(op="lifelong_patterns", inputs=[result_from_step_1], config={minOccurrences: 4, minSpanMonths: 12})
+        ```
+
+        **"What should I do this week?"**
+        ```
+        Step 1: retrieve(scope="analytics", filter={dateFrom: "LAST_30_DAYS"}, view="stats")
+        Step 2: retrieve(scope="chunks", filter={dateFrom: "LAST_14_DAYS"}, sort="date_desc", limit=30)
+        Step 3: analyze(op="action_synthesis", inputs=[result_from_step_1, result_from_step_2], config={maxItems: 7, balance: ["health", "work", "relationships"]})
+        ```
+
+        **"Should I switch jobs?"**
+        ```
+        Step 1: retrieve(scope="chunks", filter={similarTo: "job, work, career, manager, burnout", dateFrom: "LAST_18_MONTHS"}, limit=100)
+        Step 2: retrieve(scope="analytics", filter={dateFrom: "LAST_18_MONTHS", metric: "happiness"}, view="timeline")
+        Step 3: analyze(op="decision_matrix", inputs=[result_from_step_1, result_from_step_2], config={criteria: ["wellbeing", "growth", "financial", "values"], options: ["stay", "switch"]})
+        ```
+
+        ### Confidence & Provenance
+
+        - Always report: item count, date range, similarity stats from metadata
+        - If confidence="low": State "limited data" + suggest alternative query
+        - If count < 5: Acknowledge "found few results"
+        - Include specific dates in your response
+
+        ### Response Template
+
+        "Based on **{count}** journal entries from **{dateRange}**, here's what I found:
+
+        [Your insight with specific dates and evidence]
+
+        Confidence: {high/medium/low}
+        - Coverage: {spanDays} days
+        - Match quality: {medianSimilarity}
+
+        {if low confidence}
+        ⚠️ This answer is based on limited data. Would you like me to broaden the search?
+        {endif}"
 
         ## Response Style
 
+        - Be warm, empathetic, and non-judgmental
         - Start with empathy and understanding
-        - Support claims with specific evidence (dates, events, metrics)
+        - Support ALL claims with specific evidence (dates, events, metrics)
+        - Cite exact dates when referencing entries
+        - Keep responses concise but insightful (2-4 paragraphs)
         - End with reflection questions or gentle suggestions when appropriate
         - Avoid being preachy or prescriptive
-        - Use markdown formatting for better readability when appropriate
+        - Use markdown formatting for clarity
 
         ## Today's Date
 
         Today is \(formatDate(Date())).
+
+        Remember: For ANY temporal query ("latest", "recent", "yesterday"), use sort="date_desc", NOT similarTo.
         """
     }
 
@@ -228,6 +312,49 @@ class AgentKernel {
 
     private func estimateTokens(_ text: String) -> Int {
         return text.count / 4
+    }
+
+    /// Create a lightweight summary of retrieve results for agent reasoning
+    /// Full data is cached and can be retrieved via resultId
+    private func createRetrieveSummary(result: [String: Any], resultId: String) -> [String: Any] {
+        var summary: [String: Any] = [
+            "resultId": resultId
+        ]
+
+        // Extract metadata
+        if let metadata = result["metadata"] as? [String: Any] {
+            summary["metadata"] = metadata
+            if let count = metadata["count"] as? Int {
+                summary["count"] = count
+            }
+        }
+
+        // Extract items for preview (first 2 items, truncated)
+        if let items = result["items"] as? [[String: Any]] {
+            let previewItems = items.prefix(2).map { item -> [String: Any] in
+                var preview: [String: Any] = [:]
+                if let id = item["id"] {
+                    preview["id"] = id
+                }
+                if let date = item["date"] {
+                    preview["date"] = date
+                }
+                if let score = item["score"] {
+                    preview["score"] = score
+                }
+                // Truncate text for preview
+                if let text = item["text"] as? String {
+                    let maxChars = 150
+                    preview["textPreview"] = String(text.prefix(maxChars)) + (text.count > maxChars ? "..." : "")
+                }
+                return preview
+            }
+            summary["preview"] = previewItems
+        }
+
+        summary["note"] = "Full data cached with ID '\(resultId)'. To analyze, call: analyze(op=\"...\", inputs=[\"\(resultId)\"], config={...})"
+
+        return summary
     }
 }
 

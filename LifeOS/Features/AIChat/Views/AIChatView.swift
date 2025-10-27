@@ -67,6 +67,7 @@ struct AIChatView: View {
                     },
                     isLoading: viewModel.isLoading
                 )
+                .padding(.bottom, 8)
 
                 // Bottom row with buttons
                 HStack {
@@ -266,11 +267,11 @@ struct AIChatView: View {
     }
 
     private var bottomRightButtons: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             // Clipboard button
             Button(action: copyConversationToClipboard) {
                 Image(systemName: "doc.on.clipboard")
-                    .font(.system(size: 14))
+                    .font(.system(size: 13))
                     .foregroundColor(isHoveringClipboardButton ? theme.buttonTextHover : theme.buttonText)
                     .padding(8)
             }
@@ -284,6 +285,9 @@ struct AIChatView: View {
                 }
             }
 
+            Text("•")
+                .foregroundColor(theme.separatorColor)
+
             // History button
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -291,7 +295,7 @@ struct AIChatView: View {
                 }
             }) {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 14))
+                    .font(.system(size: 13))
                     .foregroundColor(isHoveringHistoryButton ? theme.buttonTextHover : theme.buttonText)
                     .padding(8)
             }
@@ -305,6 +309,8 @@ struct AIChatView: View {
                 }
             }
         }
+        .padding(8)
+        .cornerRadius(6)
     }
 }
 

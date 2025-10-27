@@ -27,6 +27,10 @@ struct SettingsView: View {
     @State private var lastProcessedDate: Date?
     @State private var showClearConfirmation: Bool = false
     @State private var autoProcessingEnabled: Bool = false
+    @State private var maxTokensPerRequest: Int = {
+        let stored = UserDefaults.standard.integer(forKey: TokenBudgetManager.maxTokensKey)
+        return stored > 0 ? stored : TokenBudgetManager.defaultMaxTokens
+    }()
 
     private let fileService = FileManagerService()
     private let authManager = AuthenticationManager.shared
@@ -255,6 +259,48 @@ struct SettingsView: View {
                 Text("• OpenAI states API data is not used for training")
                     .font(.system(size: 11))
                     .foregroundColor(theme.tertiaryText)
+            }
+            .padding(12)
+            .background(theme.hoveredBackground)
+            .cornerRadius(8)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("AI Analysis Settings")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.primaryText)
+
+                Text("Maximum tokens per request. Lower this if you encounter rate limit errors. Default is 30,000 (suitable for most OpenAI orgs).")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack {
+                    TextField("30000", value: $maxTokensPerRequest, format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 100)
+                        .onChange(of: maxTokensPerRequest) { _, newValue in
+                            // Clamp to reasonable range
+                            let clamped = max(5000, min(200000, newValue))
+                            if clamped != newValue {
+                                maxTokensPerRequest = clamped
+                            }
+                            UserDefaults.standard.set(clamped, forKey: TokenBudgetManager.maxTokensKey)
+                        }
+
+                    Text("tokens")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.secondaryText)
+
+                    Spacer()
+
+                    Button("Reset to Default") {
+                        maxTokensPerRequest = TokenBudgetManager.defaultMaxTokens
+                    }
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.accentColor)
+                }
             }
             .padding(12)
             .background(theme.hoveredBackground)

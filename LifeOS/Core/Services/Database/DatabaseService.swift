@@ -170,6 +170,47 @@ class DatabaseService {
             try db.create(index: "idx_life_events_start_date", on: "life_events", columns: ["start_date"])
         }
 
+        // Migration v2: Add FTS5 support for hybrid search
+        migrator.registerMigration("v2_fts_support") { db in
+            // Create FTS5 virtual table for full-text search
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts
+                USING fts5(
+                    text,
+                    content='chunks',
+                    content_rowid='rowid',
+                    tokenize='porter unicode61'
+                );
+            """)
+
+            // Populate FTS table with existing chunks
+            try db.execute(sql: """
+                INSERT INTO chunks_fts(rowid, text)
+                SELECT rowid, text FROM chunks;
+            """)
+
+            // Create triggers to keep FTS in sync with chunks table
+            try db.execute(sql: """
+                CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
+                    INSERT INTO chunks_fts(rowid, text) VALUES (new.rowid, new.text);
+                END;
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
+                    DELETE FROM chunks_fts WHERE rowid = old.rowid;
+                END;
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
+                    UPDATE chunks_fts SET text = new.text WHERE rowid = new.rowid;
+                END;
+            """)
+
+            print("✅ FTS5 virtual table and triggers created")
+        }
+
         do {
             try migrator.migrate(dbQueue)
             print("✅ Database migrations completed")

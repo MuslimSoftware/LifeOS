@@ -44,7 +44,6 @@ struct ChatInputView: View {
         .cornerRadius(20)
         .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 2)
         .padding(.horizontal, 20)
-        .padding(.bottom, 12)
     }
 
     private var canSend: Bool {
