@@ -20,14 +20,14 @@ struct SettingsView: View {
     @State private var showImportField: Bool = false
     @State private var selectedSection: SettingsSection = .openai
     @State private var hoveredSection: SettingsSection?
-    @State private var showProcessingSheet: Bool = false
+    // @State private var showProcessingSheet: Bool = false  // REMOVED: analytics
     @State private var isProcessing: Bool = false
     @State private var totalEntries: Int = 0
-    @State private var analyzedEntries: Int = 0
+    // @State private var analyzedEntries: Int = 0  // REMOVED: analytics
     @State private var dbSize: String = "0"
     @State private var lastProcessedDate: Date?
     @State private var showClearConfirmation: Bool = false
-    @State private var autoProcessingEnabled: Bool = false
+    // @State private var autoProcessingEnabled: Bool = false  // REMOVED: analytics
     @State private var maxTokensPerRequest: Int = {
         let stored = UserDefaults.standard.integer(forKey: TokenBudgetManager.maxTokensKey)
         return stored > 0 ? stored : TokenBudgetManager.defaultMaxTokens
@@ -552,6 +552,12 @@ struct SettingsView: View {
     }
 
     private var analyticsSection: some View {
+        Text("Analytics features have been removed. AI chat uses embeddings only.")
+            .foregroundColor(theme.secondaryText)
+    }
+
+    /* REMOVED analytics section OLD
+    private var analyticsSection_OLD: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Analytics & AI")
@@ -714,12 +720,15 @@ struct SettingsView: View {
             loadAnalyticsStats()
         }
     }
+    */  // END REMOVED analytics section OLD
 
+    /* REMOVED: analytics
     private var percentage: Int {
         guard totalEntries > 0 else { return 0 }
         return Int((Double(analyzedEntries) / Double(totalEntries)) * 100)
     }
 
+    /* REMOVED: analytics
     private func loadAnalyticsStats() {
         totalEntries = fileService.loadExistingEntries().count
 
@@ -762,6 +771,9 @@ struct SettingsView: View {
         }
     }
 
+    */  // END REMOVED analytics
+
+    /* REMOVED: analytics
     private func recomputeSummaries() {
         Task {
             do {
@@ -808,6 +820,8 @@ struct SettingsView: View {
             }
         }
     }
+    */  // END REMOVED analytics recomputeSummaries
+    */  // END REMOVED analytics percentage
 
     // MARK: - Memories Section
 

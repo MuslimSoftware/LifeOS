@@ -83,19 +83,28 @@ class AgentKernel {
                             arguments: arguments
                         )
 
-                        // Check if this is a retrieve result (has items + metadata structure)
-                        // If so, cache full result and return lightweight summary to prevent token overflow
+                        // Check if this is a retrieve result that should be cached
+                        // Cache chunks/analytics but NOT summaries (summaries should be sent in full)
                         let resultToSend: Any
                         if let resultDict = result as? [String: Any],
-                           resultDict["items"] != nil,
-                           resultDict["metadata"] != nil {
-                            // This is a retrieve result - cache it using shared service
-                            let resultId = ResultCacheService.shared.store(result: result)
+                           let items = resultDict["items"] as? [[String: Any]],
+                           resultDict["metadata"] != nil,
+                           !items.isEmpty {
 
-                            // Create lightweight summary
-                            resultToSend = createRetrieveSummary(result: resultDict, resultId: resultId)
-
-                            print("💾 [AgentKernel] Cached retrieve result '\(resultId)' (full data preserved for analyze)")
+                            // Check if this is a summary result (don't cache these)
+                            if let firstItem = items.first,
+                               let provenance = firstItem["provenance"] as? [String: Any],
+                               let source = provenance["source"] as? String,
+                               source == "summaries" {
+                                // Summaries should be sent in full, not cached
+                                resultToSend = result
+                                print("📊 [AgentKernel] Sending summary result in full (not cached)")
+                            } else {
+                                // This is chunks/analytics - cache it
+                                let resultId = ResultCacheService.shared.store(result: result)
+                                resultToSend = createRetrieveSummary(result: resultDict, resultId: resultId)
+                                print("💾 [AgentKernel] Cached retrieve result '\(resultId)' (full data preserved for analyze)")
+                            }
                         } else {
                             // Regular result - send as-is
                             resultToSend = result
@@ -104,6 +113,17 @@ class AgentKernel {
                         // Serialize result to JSON
                         let jsonData = try JSONSerialization.data(withJSONObject: resultToSend, options: .prettyPrinted)
                         let resultString = String(data: jsonData, encoding: .utf8) ?? "{}"
+
+                        // Log the full JSON being sent to LLM for debugging
+                        print("📤 [AgentKernel] Sending tool result to LLM:")
+                        print("Tool: \(toolCall.name)")
+                        print("Result JSON (\(resultString.count) chars):")
+                        if resultString.count < 2000 {
+                            print(resultString)  // Print full if small
+                        } else {
+                            print(String(resultString.prefix(2000)) + "\n... (truncated, total: \(resultString.count) chars)")
+                        }
+                        print("---")
 
                         // Add tool result to conversation
                         messages.append(.toolResult(toolCall.id, toolCall.name, resultString))
@@ -182,13 +202,14 @@ class AgentKernel {
 
         ## Available Tools
 
-        You have access to **four composable tools**:
+        You have access to **three composable tools**:
 
-        **1. retrieve**: Universal data gateway for journal entries, chunks, analytics, summaries, and memory
-        - Scopes: entries, chunks, analytics, summaries, memory
-        - Filters: dates, similarity, keywords, metrics, entities, topics, tags
-        - Sorts: date_desc, date_asc, similarity_desc, magnitude_desc, hybrid
-        - Views: raw, timeline, stats, histogram
+        **1. retrieve**: Universal data gateway for journal entries, chunks, and memory
+        - Scopes: entries, chunks, memory
+        - Filters: dates, similarity, keywords, entities, topics, tags
+        - Sorts: date_desc, date_asc, similarity_desc, hybrid
+        - Use scope="chunks" for semantic search through journal content
+        - Use scope="entries" to get full entry text grouped by entry
         - Use scope="memory" to access saved insights and rules from previous analyses
 
         **2. analyze**: Transform retrieved data into actionable insights
@@ -202,11 +223,6 @@ class AgentKernel {
         - Use this to remember: recurring patterns, correlations, decisions, rules of thumb, core values
         - Example: "User tends to burn out every 6 months when project deadlines pile up"
         - These memories persist across conversations and improve future analysis
-
-        **4. context_bundle**: Load comprehensive context at conversation start (call once at beginning)
-        - Provides: recent analytics, mood trends, historical summaries, saved memories
-        - Use this for warm-start context to answer questions faster
-        - Optional but recommended for first message in a new conversation
 
         ## Critical Guidelines for Using retrieve
 
@@ -235,12 +251,12 @@ class AgentKernel {
 
         **"How have I been feeling this month?"**
         ```
-        retrieve(scope="analytics", filter={dateFrom: "MONTH_START", metric: "happiness"}, view="timeline")
+        retrieve(scope="chunks", filter={dateFrom: "MONTH_START"}, sort="date_desc", limit=50)
         ```
 
         **"How was October?"**
         ```
-        retrieve(scope="summaries", filter={dateFrom: "2025-10-01", dateTo: "2025-10-31", timeGranularity: "month"})
+        retrieve(scope="chunks", filter={dateFrom: "2025-10-01", dateTo: "2025-10-31"}, sort="date_desc", limit=100)
         ```
 
         **"What have I always struggled with?"**
@@ -251,16 +267,14 @@ class AgentKernel {
 
         **"What should I do this week?"**
         ```
-        Step 1: retrieve(scope="analytics", filter={dateFrom: "LAST_30_DAYS"}, view="stats")
-        Step 2: retrieve(scope="chunks", filter={dateFrom: "LAST_14_DAYS"}, sort="date_desc", limit=30)
-        Step 3: analyze(op="action_synthesis", inputs=[result_from_step_1, result_from_step_2], config={maxItems: 7, balance: ["health", "work", "relationships"]})
+        Step 1: retrieve(scope="chunks", filter={dateFrom: "LAST_30_DAYS"}, sort="date_desc", limit=50)
+        Step 2: analyze(op="action_synthesis", inputs=[result_from_step_1], config={maxItems: 7, balance: ["health", "work", "relationships"]})
         ```
 
         **"Should I switch jobs?"**
         ```
         Step 1: retrieve(scope="chunks", filter={similarTo: "job, work, career, manager, burnout", dateFrom: "LAST_18_MONTHS"}, limit=100)
-        Step 2: retrieve(scope="analytics", filter={dateFrom: "LAST_18_MONTHS", metric: "happiness"}, view="timeline")
-        Step 3: analyze(op="decision_matrix", inputs=[result_from_step_1, result_from_step_2], config={criteria: ["wellbeing", "growth", "financial", "values"], options: ["stay", "switch"]})
+        Step 2: analyze(op="decision_matrix", inputs=[result_from_step_1], config={criteria: ["wellbeing", "growth", "financial", "values"], options: ["stay", "switch"]})
         ```
 
         ### Confidence & Provenance
@@ -286,14 +300,37 @@ class AgentKernel {
 
         ## Response Style
 
-        - Be warm, empathetic, and non-judgmental
-        - Start with empathy and understanding
-        - Support ALL claims with specific evidence (dates, events, metrics)
-        - Cite exact dates when referencing entries
-        - Keep responses concise but insightful (2-4 paragraphs)
-        - End with reflection questions or gentle suggestions when appropriate
-        - Avoid being preachy or prescriptive
-        - Use markdown formatting for clarity
+        **Core Principle: Be a mirror, not a therapist**
+
+        - Reflect back **what the user wrote** - quote or closely paraphrase actual journal content
+        - Be **objective and factual** - describe what happened without emotional interpretation
+        - **Only give advice when explicitly asked** ("what should I do?", "what advice do you have?")
+        - When asked factual questions ("what happened?"), give factual answers with NO unsolicited advice
+        - **Don't lead with dates** - focus on the content/events
+        - Have dates available if user asks "when was that?"
+        - Be concise (1-3 paragraphs for simple queries)
+
+        **Response Pattern by Query Type**:
+
+        1. **Factual questions** ("what happened?", "what did X do?", "what's been going on?"):
+           - State or quote what they wrote about the event
+           - Focus on CONTENT (what was said/done), not dates
+           - NO unsolicited advice
+           - NO "would you like to explore..." or reflection questions
+           - Example: "You wrote that your mother [specific action/behavior]. You felt [specific emotion they described]."
+
+        2. **Timing questions** ("when did this happen?", "what date was that?"):
+           - NOW provide the date
+           - Example: "That was on October 27."
+
+        3. **Advice requests** ("what should I do?", "what advice do you have?", "how should I handle this?"):
+           - Give direct suggestions based on journal patterns
+           - Be helpful but not preachy
+
+        4. **"What's happening" queries** ("what's been happening?", "catch me up"):
+           - Describe specific events from journal using THEIR words
+           - Focus on what happened, not when
+           - End with: "Do you have questions about this?" (not "how might you heal..." or "would you like to explore...")
 
         ## Today's Date
 

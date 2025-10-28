@@ -9,9 +9,6 @@ struct LifeOSApp: App {
         if let fontURL = Bundle.main.url(forResource: "Lato-Regular", withExtension: "ttf") {
             CTFontManagerRegisterFontsForURL(fontURL as CFURL, .process, nil)
         }
-
-        // Start observing entry saves for automatic analytics processing
-        AnalyticsObserver.shared.startObserving()
     }
      
     var body: some Scene {

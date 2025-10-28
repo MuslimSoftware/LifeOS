@@ -8,6 +8,7 @@ struct RankedItem: Codable {
     let score: Double
     let components: ScoreComponents
     let provenance: Provenance
+    let metadata: [String: Any]?
 
     struct ScoreComponents: Codable {
         var similarity: Double?
@@ -42,7 +43,8 @@ struct RankedItem: Codable {
         text: String? = nil,
         score: Double,
         components: ScoreComponents,
-        provenance: Provenance
+        provenance: Provenance,
+        metadata: [String: Any]? = nil
     ) {
         self.id = id
         self.date = date
@@ -50,6 +52,34 @@ struct RankedItem: Codable {
         self.score = score
         self.components = components
         self.provenance = provenance
+        self.metadata = metadata
+    }
+
+    // Custom Codable implementation to handle metadata dictionary
+    enum CodingKeys: String, CodingKey {
+        case id, date, text, score, components, provenance, metadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        date = try container.decode(Date.self, forKey: .date)
+        text = try container.decodeIfPresent(String.self, forKey: .text)
+        score = try container.decode(Double.self, forKey: .score)
+        components = try container.decode(ScoreComponents.self, forKey: .components)
+        provenance = try container.decode(Provenance.self, forKey: .provenance)
+        metadata = nil  // Skip decoding metadata for now
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(date, forKey: .date)
+        try container.encodeIfPresent(text, forKey: .text)
+        try container.encode(score, forKey: .score)
+        try container.encode(components, forKey: .components)
+        try container.encode(provenance, forKey: .provenance)
+        // Skip encoding metadata - it will be added to JSON in toJSON()
     }
 
     /// Convert to JSON-compatible dictionary for OpenAI
@@ -94,6 +124,11 @@ struct RankedItem: Codable {
         }
         json["provenance"] = provenanceJSON
 
+        // Add metadata if present
+        if let metadata = metadata {
+            json["metadata"] = metadata
+        }
+
         return json
     }
 }
@@ -123,25 +158,4 @@ extension RankedItem {
         )
     }
 
-    /// Create from EntryAnalytics
-    static func fromAnalytics(
-        _ analytics: EntryAnalytics,
-        score: Double,
-        components: ScoreComponents
-    ) -> RankedItem {
-        RankedItem(
-            id: analytics.id.uuidString,
-            date: analytics.date,
-            text: nil,  // Analytics don't have text
-            score: score,
-            components: components,
-            provenance: Provenance(
-                source: "analytics",
-                entryId: analytics.entryId.uuidString,
-                chunkId: nil,
-                analyticsId: analytics.id.uuidString,
-                memoryId: nil
-            )
-        )
-    }
 }

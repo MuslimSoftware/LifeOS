@@ -7,9 +7,6 @@ class RetrieveTool: AgentTool {
     let description = "Fetch journal data, analytics, or summaries with flexible filtering, sorting, and views. Use this for ALL data retrieval needs."
 
     private let chunkRepository: ChunkRepository
-    private let analyticsRepository: EntryAnalyticsRepository
-    private let monthSummaryRepository: MonthSummaryRepository
-    private let yearSummaryRepository: YearSummaryRepository
     private let memoryRepository: AgentMemoryRepository?
     private let openAI: OpenAIService
     private let bm25: BM25Service
@@ -20,7 +17,7 @@ class RetrieveTool: AgentTool {
         "properties": [
             "scope": [
                 "type": "string",
-                "enum": ["entries", "chunks", "analytics", "summaries", "memory"],
+                "enum": ["entries", "chunks", "memory"],
                 "description": "What type of data to retrieve. Use 'memory' to access saved insights and rules."
             ],
             "filter": [
@@ -110,17 +107,11 @@ class RetrieveTool: AgentTool {
 
     init(
         chunkRepository: ChunkRepository,
-        analyticsRepository: EntryAnalyticsRepository,
-        monthSummaryRepository: MonthSummaryRepository,
-        yearSummaryRepository: YearSummaryRepository,
         memoryRepository: AgentMemoryRepository? = nil,
         openAI: OpenAIService,
         bm25: BM25Service
     ) {
         self.chunkRepository = chunkRepository
-        self.analyticsRepository = analyticsRepository
-        self.monthSummaryRepository = monthSummaryRepository
-        self.yearSummaryRepository = yearSummaryRepository
         self.memoryRepository = memoryRepository
         self.openAI = openAI
         self.bm25 = bm25
@@ -140,10 +131,6 @@ class RetrieveTool: AgentTool {
             result = try await retrieveChunks(query: query)
         case .entries:
             result = try await retrieveEntries(query: query)
-        case .analytics:
-            result = try await retrieveAnalytics(query: query)
-        case .summaries:
-            result = try await retrieveSummaries(query: query)
         case .memory:
             result = try retrieveMemory(query: query)
         }
@@ -200,110 +187,6 @@ class RetrieveTool: AgentTool {
         return RetrieveResult.build(items: uniqueItems)
     }
 
-    private func retrieveAnalytics(query: RetrieveQuery) async throws -> RetrieveResult {
-        // 1. Fetch analytics from DB
-        var analytics = try fetchAnalyticsCandidates(query: query)
-
-        if analytics.isEmpty {
-            return RetrieveResult.empty(reason: "No analytics found matching filters")
-        }
-
-        // 2. Determine ranking weights
-        let weights = RankingWeights.forQuery(query)
-        let customRanker = HybridRanker(openAI: openAI, bm25: bm25, weights: weights)
-
-        // 3. Rank
-        let rankedItems = try await customRanker.rankAnalytics(analytics, query: query)
-
-        // 4. Apply view transformations (timeline, stats, etc.)
-        let viewResult = applyView(items: rankedItems, analytics: analytics, query: query)
-
-        return viewResult
-    }
-
-    private func retrieveSummaries(query: RetrieveQuery) async throws -> RetrieveResult {
-        guard let granularity = query.filter?.timeGranularity else {
-            throw RetrieveQueryError.missingRequiredFilter("timeGranularity")
-        }
-
-        switch granularity {
-        case .month:
-            return try retrieveMonthSummaries(query: query)
-        case .year:
-            return try retrieveYearSummaries(query: query)
-        case .day, .week:
-            throw RetrieveQueryError.invalidFilter
-        }
-    }
-
-    // MARK: - Summary Handlers
-
-    private func retrieveMonthSummaries(query: RetrieveQuery) throws -> RetrieveResult {
-        let startDate = query.filter?.dateFrom ?? Date(timeIntervalSince1970: 0)
-        let endDate = query.filter?.dateTo ?? Date()
-
-        let summaries = try monthSummaryRepository.getAll()
-
-        let filtered = summaries.filter { summary in
-            let summaryDate = Calendar.current.date(from: DateComponents(year: summary.year, month: summary.month)) ?? Date.distantPast
-            return summaryDate >= startDate && summaryDate <= endDate
-        }
-
-        // Convert to RankedItems
-        let items = filtered.map { summary -> RankedItem in
-            let date = Calendar.current.date(from: DateComponents(year: summary.year, month: summary.month)) ?? Date()
-            return RankedItem(
-                id: summary.id.uuidString,
-                date: date,
-                text: summary.summaryText,
-                score: 1.0,
-                components: RankedItem.ScoreComponents(),
-                provenance: RankedItem.Provenance(
-                    source: "summaries",
-                    entryId: nil,
-                    chunkId: nil,
-                    analyticsId: nil,
-                    memoryId: nil
-                )
-            )
-        }.sorted { $0.date > $1.date }
-
-        let limited = Array(items.prefix(query.limit))
-        return RetrieveResult.build(items: limited)
-    }
-
-    private func retrieveYearSummaries(query: RetrieveQuery) throws -> RetrieveResult {
-        let summaries = try yearSummaryRepository.getAll()
-
-        let startYear = Calendar.current.component(.year, from: query.filter?.dateFrom ?? Date(timeIntervalSince1970: 0))
-        let endYear = Calendar.current.component(.year, from: query.filter?.dateTo ?? Date())
-
-        let filtered = summaries.filter { summary in
-            summary.year >= startYear && summary.year <= endYear
-        }
-
-        let items = filtered.map { summary -> RankedItem in
-            let date = Calendar.current.date(from: DateComponents(year: summary.year)) ?? Date()
-            return RankedItem(
-                id: summary.id.uuidString,
-                date: date,
-                text: summary.summaryText,
-                score: 1.0,
-                components: RankedItem.ScoreComponents(),
-                provenance: RankedItem.Provenance(
-                    source: "summaries",
-                    entryId: nil,
-                    chunkId: nil,
-                    analyticsId: nil,
-                    memoryId: nil
-                )
-            )
-        }.sorted { $0.date > $1.date }
-
-        let limited = Array(items.prefix(query.limit))
-        return RetrieveResult.build(items: limited)
-    }
-
     // MARK: - Database Fetching
 
     private func fetchChunkCandidates(query: RetrieveQuery) throws -> [JournalChunk] {
@@ -315,16 +198,6 @@ class RetrieveTool: AgentTool {
             return try chunkRepository.getChunks(from: Date(timeIntervalSince1970: 0), to: dateTo)
         } else {
             return try chunkRepository.getAllChunks()
-        }
-    }
-
-    private func fetchAnalyticsCandidates(query: RetrieveQuery) throws -> [EntryAnalytics] {
-        if let dateFrom = query.filter?.dateFrom, let dateTo = query.filter?.dateTo {
-            return try analyticsRepository.getAnalytics(from: dateFrom, to: dateTo)
-        } else if let dateFrom = query.filter?.dateFrom {
-            return try analyticsRepository.getAnalytics(from: dateFrom, to: Date())
-        } else {
-            return try analyticsRepository.getAllAnalytics()
         }
     }
 
@@ -365,93 +238,6 @@ class RetrieveTool: AgentTool {
         }
     }
 
-    // MARK: - View Transformations
-
-    private func applyView(items: [RankedItem], analytics: [EntryAnalytics], query: RetrieveQuery) -> RetrieveResult {
-        switch query.view {
-        case .raw:
-            return RetrieveResult.build(items: items)
-
-        case .timeline:
-            // Group by date and return daily stats
-            return buildTimelineView(analytics: analytics)
-
-        case .stats:
-            // Return aggregate statistics
-            return buildStatsView(analytics: analytics, query: query)
-
-        case .histogram:
-            // Return histogram buckets
-            return buildHistogramView(analytics: analytics, query: query)
-        }
-    }
-
-    private func buildTimelineView(analytics: [EntryAnalytics]) -> RetrieveResult {
-        // Group by date, compute daily metrics
-        let dailyStats = analytics.map { item -> RankedItem in
-            RankedItem(
-                id: item.id.uuidString,
-                date: item.date,
-                text: nil,
-                score: item.happinessScore / 100.0,
-                components: RankedItem.ScoreComponents(magnitude: item.happinessScore / 100.0),
-                provenance: RankedItem.Provenance(
-                    source: "analytics",
-                    entryId: item.entryId.uuidString,
-                    chunkId: nil,
-                    analyticsId: item.id.uuidString,
-                    memoryId: nil
-                )
-            )
-        }
-
-        return RetrieveResult.build(items: dailyStats)
-    }
-
-    private func buildStatsView(analytics: [EntryAnalytics], query: RetrieveQuery) -> RetrieveResult {
-        guard !analytics.isEmpty else {
-            return RetrieveResult.empty(reason: "No analytics data")
-        }
-
-        let metric = query.filter?.metric ?? .happiness
-        let values: [Double]
-
-        switch metric {
-        case .happiness:
-            values = analytics.map { $0.happinessScore }
-        case .stress:
-            values = analytics.map { ranker.computeStressScore($0) }
-        case .energy:
-            values = analytics.map { ranker.computeEnergyScore($0) }
-        }
-
-        let avg = values.reduce(0, +) / Double(values.count)
-        let min = values.min() ?? 0
-        let max = values.max() ?? 0
-
-        // Create a synthetic item with stats
-        let statsItem = RankedItem(
-            id: "stats",
-            date: analytics.last?.date ?? Date(),
-            text: "average: \(avg), min: \(min), max: \(max), count: \(analytics.count)",
-            score: avg / 100.0,
-            components: RankedItem.ScoreComponents(magnitude: avg / 100.0),
-            provenance: RankedItem.Provenance(
-                source: "analytics",
-                entryId: nil,
-                chunkId: nil,
-                analyticsId: nil,
-                    memoryId: nil
-            )
-        )
-
-        return RetrieveResult.build(items: [statsItem])
-    }
-
-    private func buildHistogramView(analytics: [EntryAnalytics], query: RetrieveQuery) -> RetrieveResult {
-        // For now, return empty - can implement histogram bucketing later
-        return RetrieveResult.empty(reason: "Histogram view not yet implemented")
-    }
 
     private func retrieveMemory(query: RetrieveQuery) throws -> RetrieveResult {
         guard let memoryRepo = memoryRepository else {
@@ -512,20 +298,5 @@ class RetrieveTool: AgentTool {
         }
 
         return RetrieveResult.build(items: items)
-    }
-}
-
-// MARK: - Helper Extension
-
-private extension HybridRanker {
-    func computeStressScore(_ analytics: EntryAnalytics) -> Double {
-        let emotions = analytics.emotions
-        let stressScore = 50 + (emotions.anxiety * 20) + (emotions.sadness * 15) + (emotions.anger * 10)
-        return min(max(stressScore, 0), 100)
-    }
-
-    func computeEnergyScore(_ analytics: EntryAnalytics) -> Double {
-        let energyScore = 50 + (analytics.arousal * 30) + (analytics.emotions.joy * 15)
-        return min(max(energyScore, 0), 100)
     }
 }

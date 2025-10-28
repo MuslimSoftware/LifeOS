@@ -12,8 +12,6 @@ struct RetrieveQuery {
     enum Scope: String, Codable {
         case entries
         case chunks
-        case analytics
-        case summaries
         case memory
     }
 
@@ -221,7 +219,7 @@ enum RetrieveQueryError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidScope:
-            return "Invalid scope. Must be one of: entries, chunks, analytics, summaries"
+            return "Invalid scope. Must be one of: entries, chunks, memory"
         case .invalidFilter:
             return "Invalid filter parameters"
         case .missingRequiredFilter(let filter):

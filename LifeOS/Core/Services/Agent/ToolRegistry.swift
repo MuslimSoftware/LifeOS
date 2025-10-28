@@ -91,21 +91,14 @@ extension ToolRegistry {
 
         // Create repositories
         let chunkRepository = ChunkRepository(dbService: databaseService)
-        let entryAnalyticsRepository = EntryAnalyticsRepository(dbService: databaseService)
-        let monthSummaryRepository = MonthSummaryRepository(dbService: databaseService)
-        let yearSummaryRepository = YearSummaryRepository(dbService: databaseService)
         let memoryRepository = AgentMemoryRepository(dbService: databaseService)
 
         // Create services
         let bm25 = BM25Service(dbService: databaseService)
-        let calculator = HappinessIndexCalculator()
 
-        // Register retrieve tool (replaces 5 old tools, now with memory support)
+        // Register retrieve tool (chunks + memory only)
         registry.registerTool(RetrieveTool(
             chunkRepository: chunkRepository,
-            analyticsRepository: entryAnalyticsRepository,
-            monthSummaryRepository: monthSummaryRepository,
-            yearSummaryRepository: yearSummaryRepository,
             memoryRepository: memoryRepository,
             openAI: openAI,
             bm25: bm25
@@ -116,14 +109,6 @@ extension ToolRegistry {
 
         // Register memory_write tool (Phase 4)
         registry.registerTool(MemoryWriteTool(repository: memoryRepository))
-
-        // Register context_bundle tool (Phase 4)
-        registry.registerTool(ContextBundleTool(
-            analyticsRepository: entryAnalyticsRepository,
-            monthSummaryRepository: monthSummaryRepository,
-            memoryRepository: memoryRepository,
-            calculator: calculator
-        ))
 
         return registry
     }

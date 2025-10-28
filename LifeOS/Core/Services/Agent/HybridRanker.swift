@@ -91,59 +91,6 @@ class HybridRanker {
     }
 
     /// Rank analytics using hybrid scoring
-    /// - Parameters:
-    ///   - analytics: Candidate analytics records
-    ///   - query: The retrieve query with filters
-    /// - Returns: Sorted array of ranked items
-    func rankAnalytics(
-        _ analytics: [EntryAnalytics],
-        query: RetrieveQuery
-    ) async throws -> [RankedItem] {
-        guard !analytics.isEmpty else { return [] }
-
-        let now = Date()
-        var scoredItems: [(analytics: EntryAnalytics, score: Double, components: RankedItem.ScoreComponents)] = []
-
-        for item in analytics {
-            var totalScore = 0.0
-            var components = RankedItem.ScoreComponents()
-
-            // 1. Recency component (primary for analytics)
-            let ageDays = now.timeIntervalSince(item.date) / 86400
-            let recencyDecay = exp(-log(2) * ageDays / Double(weights.recencyHalfLife))
-            components.recencyDecay = recencyDecay
-            totalScore += weights.recency * recencyDecay
-
-            // 2. Metric magnitude component
-            if let metric = query.filter?.metric {
-                let magnitude: Double
-                switch metric {
-                case .happiness:
-                    magnitude = item.happinessScore / 100.0
-                case .stress:
-                    magnitude = computeStressScore(item) / 100.0
-                case .energy:
-                    magnitude = computeEnergyScore(item) / 100.0
-                }
-                components.magnitude = magnitude
-                totalScore += weights.metricMagnitude * magnitude
-            }
-
-            scoredItems.append((item, totalScore, components))
-        }
-
-        // Sort by score descending
-        scoredItems.sort { $0.score > $1.score }
-
-        // Apply limit
-        let limited = Array(scoredItems.prefix(query.limit))
-
-        // Convert to RankedItem
-        return limited.map { item in
-            RankedItem.fromAnalytics(item.analytics, score: item.score, components: item.components)
-        }
-    }
-
     // MARK: - Private Helpers
 
     /// Compute cosine similarity using Accelerate framework
@@ -163,19 +110,6 @@ class HybridRanker {
         guard magnitudeA > 0 && magnitudeB > 0 else { return 0 }
 
         return dotProduct / (sqrt(magnitudeA) * sqrt(magnitudeB))
-    }
-
-    /// Compute stress score from analytics (same formula as HappinessIndexCalculator)
-    private func computeStressScore(_ analytics: EntryAnalytics) -> Double {
-        let emotions = analytics.emotions
-        let stressScore = 50 + (emotions.anxiety * 20) + (emotions.sadness * 15) + (emotions.anger * 10)
-        return min(max(stressScore, 0), 100)
-    }
-
-    /// Compute energy score from analytics (same formula as HappinessIndexCalculator)
-    private func computeEnergyScore(_ analytics: EntryAnalytics) -> Double {
-        let energyScore = 50 + (analytics.arousal * 30) + (analytics.emotions.joy * 15)
-        return min(max(energyScore, 0), 100)
     }
 }
 

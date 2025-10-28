@@ -56,13 +56,6 @@ class FileManagerService {
 
         do {
             try encryptedData.write(to: fileURL, options: .atomic)
-
-            // Post notification that entry was saved for analytics processing
-            NotificationCenter.default.post(
-                name: .entryDidSave,
-                object: nil,
-                userInfo: ["entry": entry]
-            )
         } catch {
             print("Error saving entry: \(error)")
         }

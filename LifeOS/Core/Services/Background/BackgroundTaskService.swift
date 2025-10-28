@@ -98,15 +98,4 @@ class BackgroundTaskService {
         operationQueue.isSuspended
     }
 
-    // MARK: - Convenience Methods
-
-    /// Check if any analytics processing tasks are active
-    var hasActiveAnalyticsTasks: Bool {
-        operationQueue.operations.contains { $0 is AnalyticsProcessingTask }
-    }
-
-    /// Check if any summarization tasks are active
-    var hasActiveSummarizationTasks: Bool {
-        operationQueue.operations.contains { $0 is SummarizationTask }
-    }
 }
