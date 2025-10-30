@@ -3,8 +3,7 @@ import SwiftUI
 enum SettingsSection: String, CaseIterable {
     case openai = "OpenAI API"
     case backup = "Data Backup"
-    case analytics = "Analytics"
-    case memories = "Memories"
+    case embeddings = "Embeddings"
 }
 
 struct SettingsView: View {
@@ -23,7 +22,7 @@ struct SettingsView: View {
     // @State private var showProcessingSheet: Bool = false  // REMOVED: analytics
     @State private var isProcessing: Bool = false
     @State private var totalEntries: Int = 0
-    // @State private var analyzedEntries: Int = 0  // REMOVED: analytics
+    @State private var entriesWithEmbeddings: Int = 0
     @State private var dbSize: String = "0"
     @State private var lastProcessedDate: Date?
     @State private var showClearConfirmation: Bool = false
@@ -32,7 +31,6 @@ struct SettingsView: View {
         let stored = UserDefaults.standard.integer(forKey: TokenBudgetManager.maxTokensKey)
         return stored > 0 ? stored : TokenBudgetManager.defaultMaxTokens
     }()
-    @State private var memoryViewModel: MemoryManagementViewModel?
 
     private let fileService = FileManagerService()
     private let authManager = AuthenticationManager.shared
@@ -51,18 +49,6 @@ struct SettingsView: View {
         .onAppear {
             // Use cached auth state instead of triggering another keychain access
             isKeyStored = authManager.isAuthenticated
-
-            // Initialize memory view model
-            if memoryViewModel == nil {
-                do {
-                    let dbService = DatabaseService.shared
-                    try dbService.initialize()
-                    let repository = AgentMemoryRepository(dbService: dbService)
-                    memoryViewModel = MemoryManagementViewModel(repository: repository)
-                } catch {
-                    print("❌ Failed to initialize memory view model: \(error)")
-                }
-            }
         }
     }
 
@@ -145,10 +131,8 @@ struct SettingsView: View {
                     openAISection
                 case .backup:
                     backupSection
-                case .analytics:
-                    analyticsSection
-                case .memories:
-                    memoriesSection
+                case .embeddings:
+                    embeddingsSection
                 }
             }
         }
@@ -551,9 +535,97 @@ struct SettingsView: View {
         }
     }
 
-    private var analyticsSection: some View {
-        Text("Analytics features have been removed. AI chat uses embeddings only.")
-            .foregroundColor(theme.secondaryText)
+    private var embeddingsSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // Header
+            VStack(alignment: .leading, spacing: 12) {
+                Text("AI Chat Embeddings")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(theme.primaryText)
+
+                Text("Process your journal entries to enable AI chat semantic search. Each entry is converted into embeddings (vector representations) that allow the AI to understand and search through your journal content.")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Stats
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Storage Information")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.primaryText)
+
+                HStack {
+                    Text("Total Entries:")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.secondaryText)
+                    Spacer()
+                    Text("\(totalEntries)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.primaryText)
+                }
+
+                HStack {
+                    Text("Entries with Embeddings:")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.secondaryText)
+                    Spacer()
+                    Text("\(entriesWithEmbeddings) (\(embeddingsPercentage)%)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.primaryText)
+                }
+
+                HStack {
+                    Text("Database Size:")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.secondaryText)
+                    Spacer()
+                    Text("\(dbSize) MB")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.primaryText)
+                }
+            }
+            .padding(12)
+            .background(theme.hoveredBackground)
+            .cornerRadius(8)
+
+            // Actions
+            VStack(alignment: .leading, spacing: 12) {
+                Button("Process All Entries") {
+                    processAllEntries()
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(isProcessing ? theme.dividerColor : theme.accentColor)
+                .cornerRadius(6)
+                .disabled(isProcessing)
+
+                Button("Clear Embeddings Database") {
+                    showClearConfirmation = true
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .foregroundColor(theme.primaryText)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(theme.hoveredBackground)
+                .cornerRadius(6)
+            }
+        }
+        .onAppear {
+            loadEmbeddingsStats()
+        }
+        .alert("Clear Embeddings Database?", isPresented: $showClearConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Clear", role: .destructive) {
+                clearEmbeddings()
+            }
+        } message: {
+            Text("This will delete all embeddings. You can regenerate them by processing entries again.")
+        }
     }
 
     /* REMOVED analytics section OLD
@@ -823,22 +895,68 @@ struct SettingsView: View {
     */  // END REMOVED analytics recomputeSummaries
     */  // END REMOVED analytics percentage
 
-    // MARK: - Memories Section
+    // MARK: - Embeddings Helpers
 
-    private var memoriesSection: some View {
-        Group {
-            if let viewModel = memoryViewModel {
-                MemoryManagementView(viewModel: viewModel)
-            } else {
-                VStack(spacing: 16) {
-                    ProgressView()
-                    Text("Loading memories...")
-                        .font(.system(size: 13))
-                        .foregroundColor(theme.secondaryText)
+    private var embeddingsPercentage: Int {
+        guard totalEntries > 0 else { return 0 }
+        return Int((Double(entriesWithEmbeddings) / Double(totalEntries)) * 100)
+    }
+
+    private func loadEmbeddingsStats() {
+        totalEntries = fileService.loadExistingEntries().count
+
+        do {
+            let dbService = DatabaseService.shared
+            try dbService.initialize()
+            let chunkRepo = ChunkRepository(dbService: dbService)
+
+            // Count unique entry IDs that have embeddings
+            let allChunks = try chunkRepo.getAllChunks()
+            let uniqueEntryIds = Set(allChunks.map { $0.entryId })
+            entriesWithEmbeddings = uniqueEntryIds.count
+
+            // Calculate database size
+            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let dbURL = documentsPath.appendingPathComponent("LifeOS/analytics.db")
+            if FileManager.default.fileExists(atPath: dbURL.path) {
+                let attributes = try FileManager.default.attributesOfItem(atPath: dbURL.path)
+                if let fileSize = attributes[FileAttributeKey.size] as? Int64 {
+                    dbSize = String(format: "%.2f", Double(fileSize) / 1_048_576) // Convert to MB
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, 40)
             }
+        } catch {
+            print("⚠️ Failed to load embeddings stats: \(error)")
+        }
+    }
+
+    private func processAllEntries() {
+        Task {
+            isProcessing = true
+            defer { isProcessing = false }
+
+            let entries = fileService.loadExistingEntries()
+            print("📊 Processing \(entries.count) entries for embeddings...")
+
+            // TODO: Implement batch processing with IngestionService
+            // This will need to create chunks and generate embeddings for each entry
+            // For now, this is a placeholder
+
+            loadEmbeddingsStats()
+        }
+    }
+
+    private func clearEmbeddings() {
+        do {
+            let dbService = DatabaseService.shared
+            try dbService.initialize()
+            let chunkRepo = ChunkRepository(dbService: dbService)
+
+            try chunkRepo.deleteAll()
+            print("✅ Cleared all embeddings")
+
+            loadEmbeddingsStats()
+        } catch {
+            print("⚠️ Failed to clear embeddings: \(error)")
         }
     }
 }

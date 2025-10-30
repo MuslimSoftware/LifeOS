@@ -123,6 +123,14 @@ class ChunkRepository {
         }
     }
 
+    /// Delete all chunks from the database
+    func deleteAll() throws {
+        try dbService.getQueue().write { db in
+            try db.execute(sql: "DELETE FROM chunks")
+            try db.execute(sql: "DELETE FROM chunks_fts")
+        }
+    }
+
     // MARK: - Private Helpers
 
     private func rowToChunk(_ row: Row) throws -> JournalChunk {

@@ -14,11 +14,13 @@ struct ChatHistoryView: View {
     let currentConversationId: UUID?
     let onConversationTap: (UUID) -> Void
     let onDeleteConversation: (UUID) -> Void
+    let onCopyConversation: (UUID) -> Void
     let onNewConversation: () -> Void
 
     @State private var isHoveringNewChat = false
     @State private var hoveredConversationId: UUID?
     @State private var hoveredTrashId: UUID?
+    @State private var hoveredCopyId: UUID?
     @State private var conversationToDelete: UUID?
 
     var body: some View {
@@ -60,10 +62,15 @@ struct ChatHistoryView: View {
                                     isSelected: currentConversationId == conversation.id,
                                     isHovered: hoveredConversationId == conversation.id,
                                     hoveredTrashId: hoveredTrashId,
+                                    hoveredCopyId: hoveredCopyId,
                                     onTap: { onConversationTap(conversation.id) },
                                     onDelete: { conversationToDelete = conversation.id },
+                                    onCopy: { onCopyConversation(conversation.id) },
                                     onTrashHover: { hovering in
                                         hoveredTrashId = hovering ? conversation.id : nil
+                                    },
+                                    onCopyHover: { hovering in
+                                        hoveredCopyId = hovering ? conversation.id : nil
                                     }
                                 )
                                 .onHover { hovering in
@@ -153,58 +160,99 @@ struct ConversationRow: View {
     let isSelected: Bool
     let isHovered: Bool
     let hoveredTrashId: UUID?
+    let hoveredCopyId: UUID?
     let onTap: () -> Void
     let onDelete: () -> Void
+    let onCopy: () -> Void
     let onTrashHover: (Bool) -> Void
+    let onCopyHover: (Bool) -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(conversation.title)
-                        .font(.system(size: 11))
-                        .foregroundColor(theme.primaryText)
-                        .lineLimit(1)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(conversation.title)
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.primaryText)
+                    .lineLimit(1)
 
-                    Spacer()
-
-                    if isHovered {
-                        Button(action: onDelete) {
-                            Image(systemName: "trash")
-                                .font(.system(size: 11))
-                                .foregroundColor(hoveredTrashId == conversation.id ? theme.destructive : theme.secondaryText)
+                Spacer()
+            }
+            .overlay(alignment: .trailing) {
+                HStack(spacing: 8) {
+                    Button(action: onCopy) {
+                        Image(systemName: "doc.on.clipboard")
+                            .font(.system(size: 11))
+                            .foregroundColor(hoveredCopyId == conversation.id ? theme.buttonTextHover : theme.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hovering in
+                        onCopyHover(hovering)
+                        if hovering {
+                            NSCursor.pointingHand.push()
+                        } else {
+                            NSCursor.pop()
                         }
-                        .buttonStyle(.plain)
-                        .onHover { hovering in
-                            onTrashHover(hovering)
-                            if hovering {
-                                NSCursor.pointingHand.push()
-                            } else {
-                                NSCursor.pop()
-                            }
+                    }
+
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11))
+                            .foregroundColor(hoveredTrashId == conversation.id ? theme.destructive : theme.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hovering in
+                        onTrashHover(hovering)
+                        if hovering {
+                            NSCursor.pointingHand.push()
+                        } else {
+                            NSCursor.pop()
                         }
                     }
                 }
+                .opacity(isHovered ? 1 : 0)
+            }
 
-                HStack(spacing: 4) {
-                    Text("\(conversation.messages.count) messages")
-                        .font(.system(size: 9))
-                        .foregroundColor(theme.secondaryText)
+            HStack(spacing: 4) {
+                Text("\(conversation.messages.count) messages")
+                    .font(.system(size: 9))
+                    .foregroundColor(theme.secondaryText)
 
-                    Text("•")
-                        .font(.system(size: 9))
-                        .foregroundColor(theme.secondaryText)
+                Text("•")
+                    .font(.system(size: 9))
+                    .foregroundColor(theme.secondaryText)
 
-                    Text(conversation.updatedAt.formatted(date: .omitted, time: .shortened))
-                        .font(.system(size: 9))
-                        .foregroundColor(theme.secondaryText)
+                Text(conversation.updatedAt.formatted(date: .omitted, time: .shortened))
+                    .font(.system(size: 9))
+                    .foregroundColor(theme.secondaryText)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(
+            ZStack(alignment: .leading) {
+                // Background color based on state
+                (isSelected ? theme.selectedBackground : (isHovered ? theme.hoveredBackground : Color.clear))
+
+                // Selection indicator on the left
+                if isSelected {
+                    Rectangle()
+                        .fill(theme.accentColor)
+                        .frame(width: 3)
+                        .padding(.vertical, 2)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(isSelected ? theme.selectedBackground : (isHovered ? theme.hoveredBackground : Color.clear))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
         }
-        .buttonStyle(.plain)
+        .onHover { hovering in
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
     }
 }

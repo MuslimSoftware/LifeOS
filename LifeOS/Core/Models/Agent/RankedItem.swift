@@ -30,11 +30,10 @@ struct RankedItem: Codable {
     }
 
     struct Provenance: Codable {
-        let source: String  // "chunks", "analytics", "summaries", "memory"
+        let source: String  // "chunks", "analytics", "summaries"
         let entryId: String?
         let chunkId: String?
         let analyticsId: String?
-        let memoryId: String?
     }
 
     init(
@@ -152,8 +151,7 @@ extension RankedItem {
                 source: "chunks",
                 entryId: chunk.entryId.uuidString,
                 chunkId: chunk.id.uuidString,
-                analyticsId: nil,
-                memoryId: nil
+                analyticsId: nil
             )
         )
     }

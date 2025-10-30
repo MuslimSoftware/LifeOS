@@ -14,7 +14,6 @@ struct AIChatView: View {
     @StateObject private var viewModel: AIChatViewModel
     @State private var messageText: String = ""
     @State private var isHoveringHistoryButton = false
-    @State private var isHoveringClipboardButton = false
     @State private var scrollToMessageId: UUID?
 
     init(agentKernel: AgentKernel) {
@@ -57,6 +56,8 @@ struct AIChatView: View {
                     errorBanner(error)
                 }
 
+                Spacer()
+
                 // Input
                 ChatInputView(
                     messageText: $messageText,
@@ -67,14 +68,14 @@ struct AIChatView: View {
                     },
                     isLoading: viewModel.isLoading
                 )
-                .padding(.bottom, 8)
 
                 // Bottom row with buttons
                 HStack {
                     Spacer()
                     bottomRightButtons
                 }
-                .padding()
+                .padding(.horizontal)
+                .padding(.bottom)
                 .frame(height: 60)
             }
             .background(theme.surfaceColor)
@@ -90,6 +91,9 @@ struct AIChatView: View {
                     },
                     onDeleteConversation: { conversationId in
                         viewModel.deleteConversation(id: conversationId)
+                    },
+                    onCopyConversation: { conversationId in
+                        copyConversationToClipboard(conversationId: conversationId)
                     },
                     onNewConversation: {
                         viewModel.createNewConversation()
@@ -187,6 +191,7 @@ struct AIChatView: View {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 60))
                 .foregroundColor(.secondary)
+                .padding(.top, 80)
 
             VStack(spacing: 8) {
                 Text("Ask me anything")
@@ -200,26 +205,34 @@ struct AIChatView: View {
                     .padding(.horizontal, 40)
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Try asking:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                ForEach([
-                    "How have I been feeling this month?",
-                    "What made me happy last week?",
-                    "What are my main stressors?",
-                    "Show me my happiness trends"
-                ], id: \.self) { suggestion in
-                    Button(action: {
-                        messageText = suggestion
-                    }) {
-                        Text(suggestion)
-                            .font(.subheadline)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(theme.hoveredBackground)
-                            .cornerRadius(8)
+            VStack(spacing: 12) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    ForEach([
+                        "Summarize my recent journal entries",
+                        "What themes appear in my journal?",
+                        "Help me reflect on my week",
+                        "What patterns do you notice in my writing?"
+                    ], id: \.self) { suggestion in
+                        Button(action: {
+                            messageText = suggestion
+                        }) {
+                            Text(suggestion)
+                                .font(.subheadline)
+                                .foregroundColor(theme.primaryText)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .frame(maxWidth: .infinity)
+                                .background(theme.hoveredBackground)
+                                .cornerRadius(12)
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { hovering in
+                            if hovering {
+                                NSCursor.pointingHand.push()
+                            } else {
+                                NSCursor.pop()
+                            }
+                        }
                     }
                 }
             }
@@ -246,8 +259,9 @@ struct AIChatView: View {
         .background(Color.red.opacity(0.1))
     }
 
-    private func copyConversationToClipboard() {
-        let messages = viewModel.currentMessages
+    private func copyConversationToClipboard(conversationId: UUID) {
+        guard let conversation = viewModel.conversations.first(where: { $0.id == conversationId }) else { return }
+        let messages = conversation.messages
         guard !messages.isEmpty else { return }
 
         let conversationText: String = messages.map { message in
@@ -268,26 +282,6 @@ struct AIChatView: View {
 
     private var bottomRightButtons: some View {
         HStack(spacing: 8) {
-            // Clipboard button
-            Button(action: copyConversationToClipboard) {
-                Image(systemName: "doc.on.clipboard")
-                    .font(.system(size: 13))
-                    .foregroundColor(isHoveringClipboardButton ? theme.buttonTextHover : theme.buttonText)
-                    .padding(8)
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                isHoveringClipboardButton = hovering
-                if hovering {
-                    NSCursor.pointingHand.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
-
-            Text("•")
-                .foregroundColor(theme.separatorColor)
-
             // History button
             Button(action: {
                 withAnimation(.easeInOut(duration: 0.2)) {

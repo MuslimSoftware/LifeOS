@@ -17,17 +17,18 @@ struct ChatInputView: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             TextField("Ask about your journal...", text: $messageText, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 16))
-                .padding(12)
+                .font(.system(size: 20))
                 .lineLimit(1...5)
                 .focused($isFocused)
                 .disabled(isLoading)
                 .onSubmit {
                     sendMessage()
                 }
+                .frame(maxWidth: .infinity)
+                .padding(18)
 
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
@@ -36,9 +37,12 @@ struct ChatInputView: View {
             }
             .buttonStyle(.plain)
             .disabled(!canSend)
+            .padding(.trailing, 12)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isFocused = true
+        }
         .frame(maxWidth: 650)
         .background(theme.hoveredBackground)
         .cornerRadius(20)

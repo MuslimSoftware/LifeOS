@@ -91,24 +91,19 @@ extension ToolRegistry {
 
         // Create repositories
         let chunkRepository = ChunkRepository(dbService: databaseService)
-        let memoryRepository = AgentMemoryRepository(dbService: databaseService)
 
         // Create services
         let bm25 = BM25Service(dbService: databaseService)
 
-        // Register retrieve tool (chunks + memory only)
+        // Register retrieve tool (chunks only)
         registry.registerTool(RetrieveTool(
             chunkRepository: chunkRepository,
-            memoryRepository: memoryRepository,
             openAI: openAI,
             bm25: bm25
         ))
 
         // Register analyze tool (Phase 2)
         registry.registerTool(AnalyzeTool(openAI: openAI))
-
-        // Register memory_write tool (Phase 4)
-        registry.registerTool(MemoryWriteTool(repository: memoryRepository))
 
         return registry
     }

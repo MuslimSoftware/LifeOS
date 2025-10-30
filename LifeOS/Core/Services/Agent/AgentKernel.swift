@@ -202,15 +202,14 @@ class AgentKernel {
 
         ## Available Tools
 
-        You have access to **three composable tools**:
+        You have access to **two composable tools**:
 
-        **1. retrieve**: Universal data gateway for journal entries, chunks, and memory
-        - Scopes: entries, chunks, memory
-        - Filters: dates, similarity, keywords, entities, topics, tags
+        **1. retrieve**: Universal data gateway for journal entries and chunks
+        - Scopes: entries, chunks
+        - Filters: dates, similarity, keywords, entities, topics
         - Sorts: date_desc, date_asc, similarity_desc, hybrid
         - Use scope="chunks" for semantic search through journal content
         - Use scope="entries" to get full entry text grouped by entry
-        - Use scope="memory" to access saved insights and rules from previous analyses
 
         **2. analyze**: Transform retrieved data into actionable insights
         - Operations:
@@ -218,11 +217,6 @@ class AgentKernel {
           - `decision_matrix`: Structured decision-making support
           - `action_synthesis`: Generate actionable todos from current state
         - Always call retrieve FIRST to get data, then pass results to analyze
-
-        **3. memory_write**: Save important insights, patterns, or decisions for future reference
-        - Use this to remember: recurring patterns, correlations, decisions, rules of thumb, core values
-        - Example: "User tends to burn out every 6 months when project deadlines pile up"
-        - These memories persist across conversations and improve future analysis
 
         ## Critical Guidelines for Using retrieve
 

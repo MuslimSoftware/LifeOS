@@ -7,7 +7,6 @@ class RetrieveTool: AgentTool {
     let description = "Fetch journal data, analytics, or summaries with flexible filtering, sorting, and views. Use this for ALL data retrieval needs."
 
     private let chunkRepository: ChunkRepository
-    private let memoryRepository: AgentMemoryRepository?
     private let openAI: OpenAIService
     private let bm25: BM25Service
     private let ranker: HybridRanker
@@ -17,8 +16,8 @@ class RetrieveTool: AgentTool {
         "properties": [
             "scope": [
                 "type": "string",
-                "enum": ["entries", "chunks", "memory"],
-                "description": "What type of data to retrieve. Use 'memory' to access saved insights and rules."
+                "enum": ["entries", "chunks"],
+                "description": "What type of data to retrieve."
             ],
             "filter": [
                 "type": "object",
@@ -107,12 +106,10 @@ class RetrieveTool: AgentTool {
 
     init(
         chunkRepository: ChunkRepository,
-        memoryRepository: AgentMemoryRepository? = nil,
         openAI: OpenAIService,
         bm25: BM25Service
     ) {
         self.chunkRepository = chunkRepository
-        self.memoryRepository = memoryRepository
         self.openAI = openAI
         self.bm25 = bm25
         self.ranker = HybridRanker(openAI: openAI, bm25: bm25)
@@ -131,8 +128,6 @@ class RetrieveTool: AgentTool {
             result = try await retrieveChunks(query: query)
         case .entries:
             result = try await retrieveEntries(query: query)
-        case .memory:
-            result = try retrieveMemory(query: query)
         }
 
         print("🔍 [Retrieve] Found \(result.metadata.count) results (confidence: \(result.metadata.confidence))")
@@ -236,67 +231,5 @@ class RetrieveTool: AgentTool {
             }
             return true  // Keep items without similarity score
         }
-    }
-
-
-    private func retrieveMemory(query: RetrieveQuery) throws -> RetrieveResult {
-        guard let memoryRepo = memoryRepository else {
-            return RetrieveResult.empty(reason: "Memory repository not available")
-        }
-
-        // 1. Fetch memories based on filters
-        var memories: [AgentMemory] = []
-
-        if let tags = query.filter?.topics, !tags.isEmpty {
-            // Search by tags (topics field maps to tags)
-            memories = try memoryRepo.findByTags(tags)
-        } else if let dateFrom = query.filter?.dateFrom, let dateTo = query.filter?.dateTo {
-            // Search by date range
-            memories = try memoryRepo.findByDateRange(from: dateFrom, to: dateTo)
-        } else {
-            // Get recent memories
-            memories = try memoryRepo.getRecent(limit: query.limit)
-        }
-
-        // 2. Sort memories
-        switch query.sort {
-        case .dateDesc:
-            memories.sort { $0.createdAt > $1.createdAt }
-        case .dateAsc:
-            memories.sort { $0.createdAt < $1.createdAt }
-        default:
-            // Default to most recent first
-            memories.sort { $0.createdAt > $1.createdAt }
-        }
-
-        // 3. Limit results
-        let limitedMemories = Array(memories.prefix(query.limit))
-
-        // 4. Update access times
-        for memory in limitedMemories {
-            try? memoryRepo.updateAccessTime(memory.id)
-        }
-
-        // 5. Convert to RankedItems
-        let items = limitedMemories.map { memory -> RankedItem in
-            let provenance = RankedItem.Provenance(
-                source: "memory",
-                entryId: nil,
-                chunkId: nil,
-                analyticsId: nil,
-                memoryId: memory.id
-            )
-
-            return RankedItem(
-                id: memory.id,
-                date: memory.createdAt,
-                text: memory.content,
-                score: 1.0,
-                components: RankedItem.ScoreComponents(),
-                provenance: provenance
-            )
-        }
-
-        return RetrieveResult.build(items: items)
     }
 }
