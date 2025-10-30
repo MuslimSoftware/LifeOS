@@ -20,15 +20,16 @@ struct ChatInputView: View {
         HStack(spacing: 8) {
             TextField("Ask about your journal...", text: $messageText, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 20))
+                .font(.system(size: 16))
                 .lineLimit(1...5)
                 .focused($isFocused)
                 .disabled(isLoading)
+                .foregroundColor(isLoading ? theme.secondaryText : theme.primaryText)
                 .onSubmit {
                     sendMessage()
                 }
                 .frame(maxWidth: .infinity)
-                .padding(18)
+                .padding(22)
 
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
@@ -37,6 +38,16 @@ struct ChatInputView: View {
             }
             .buttonStyle(.plain)
             .disabled(!canSend)
+            .accessibilityLabel("Send message")
+            .accessibilityHint(canSend ? "Double tap to send your message" : "Enter a message to enable sending")
+            .accessibilityAddTraits(.isButton)
+            .onHover { hovering in
+                if hovering && canSend {
+                    NSCursor.pointingHand.push()
+                } else if !hovering {
+                    NSCursor.pop()
+                }
+            }
             .padding(.trailing, 12)
         }
         .contentShape(Rectangle())

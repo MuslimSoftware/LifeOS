@@ -40,6 +40,9 @@ struct ChatHistoryView: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            .accessibilityLabel("New Chat")
+            .accessibilityHint("Double tap to start a new conversation")
+            .accessibilityAddTraits(.isButton)
             .onHover { hovering in
                 isHoveringNewChat = hovering
                 if hovering {
@@ -169,47 +172,59 @@ struct ConversationRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
+            HStack(spacing: 4) {
                 Text(conversation.title)
                     .font(.system(size: 11))
                     .foregroundColor(theme.primaryText)
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(1)
 
-                Spacer()
-            }
-            .overlay(alignment: .trailing) {
-                HStack(spacing: 8) {
-                    Button(action: onCopy) {
-                        Image(systemName: "doc.on.clipboard")
-                            .font(.system(size: 11))
-                            .foregroundColor(hoveredCopyId == conversation.id ? theme.buttonTextHover : theme.secondaryText)
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        onCopyHover(hovering)
-                        if hovering {
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
+                Spacer(minLength: 0)
+
+                if isHovered {
+                    HStack(spacing: 8) {
+                        Button(action: onCopy) {
+                            Image(systemName: "doc.on.clipboard")
+                                .font(.system(size: 11))
+                                .foregroundColor(hoveredCopyId == conversation.id ? theme.buttonTextHover : theme.secondaryText)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Copy conversation")
+                        .accessibilityHint("Double tap to copy conversation to clipboard")
+                        .accessibilityAddTraits(.isButton)
+                        .onHover { hovering in
+                            onCopyHover(hovering)
+                            if hovering {
+                                NSCursor.pointingHand.push()
+                            } else {
+                                NSCursor.pop()
+                            }
+                        }
+
+                        Button(action: onDelete) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 11))
+                                .foregroundColor(hoveredTrashId == conversation.id ? theme.destructive : theme.secondaryText)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Delete conversation")
+                        .accessibilityHint("Double tap to delete this conversation")
+                        .accessibilityAddTraits(.isButton)
+                        .onHover { hovering in
+                            onTrashHover(hovering)
+                            if hovering {
+                                NSCursor.pointingHand.push()
+                            } else {
+                                NSCursor.pop()
+                            }
                         }
                     }
-
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 11))
-                            .foregroundColor(hoveredTrashId == conversation.id ? theme.destructive : theme.secondaryText)
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        onTrashHover(hovering)
-                        if hovering {
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
-                        }
-                    }
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.8)),
+                        removal: .opacity
+                    ))
                 }
-                .opacity(isHovered ? 1 : 0)
             }
 
             HStack(spacing: 4) {
@@ -247,6 +262,12 @@ struct ConversationRow: View {
         .onTapGesture {
             onTap()
         }
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Conversation: \(conversation.title)")
+        .accessibilityValue("\(conversation.messages.count) messages, updated \(conversation.updatedAt.formatted(date: .omitted, time: .shortened))")
+        .accessibilityHint(isSelected ? "Currently selected" : "Double tap to open this conversation")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .onHover { hovering in
             if hovering {
                 NSCursor.pointingHand.push()

@@ -37,16 +37,22 @@ struct ContentView: View {
                     }
             } else if let editorVM = editorViewModel, let entryListVM = entryListViewModel {
                 HStack(spacing: 0) {
-                    // Sidebar pinned to leading edge with fixed width
-                    SidebarView(selectedRoute: $selectedRoute)
-                        .frame(width: 160)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .theme(settings.currentTheme)
+                    // Sidebar with dynamic width based on collapse state
+                    if !settings.isSidebarCollapsed {
+                        SidebarView(selectedRoute: $selectedRoute)
+                            .frame(width: settings.sidebarWidth)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                            .theme(settings.currentTheme)
+                            .accessibilityElement(children: .contain)
+                            .accessibilityLabel("Navigation sidebar")
 
-                    Divider()
+                        Divider()
+                    }
 
                     // Main content takes remaining space
                     mainContent
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel("Main content")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .environment(editorVM)
                         .environment(entryListVM)
@@ -83,6 +89,7 @@ struct ContentView: View {
                             saveTask?.cancel()
                         }
                 }
+                .animation(.easeInOut(duration: 0.2), value: settings.isSidebarCollapsed)
             } else {
                 ProgressView()
                     .onAppear {
@@ -97,6 +104,19 @@ struct ContentView: View {
             print("🔄 Auth changed, reinitializing AI services...")
             initializeAIServices()
         }
+        .onAppear {
+            // Set up keyboard shortcut for sidebar toggle (⌘\)
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                // Check for Command+\ (keyCode 42 is backslash)
+                if event.modifierFlags.contains(.command) && event.keyCode == 42 {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        settings.toggleSidebar()
+                    }
+                    return nil // Event consumed
+                }
+                return event
+            }
+        }
     }
     
     @ViewBuilder
@@ -104,16 +124,19 @@ struct ContentView: View {
         switch selectedRoute {
         case .calendar:
             CalendarView(selectedRoute: $selectedRoute)
+                .withSidebarToggle()
         case .journal:
             JournalPageView(
                 pdfService: pdfService,
                 fileService: fileService
             )
+            .withSidebarToggle()
         case .aiChat:
             if !authManager.isAuthenticated {
                 setupRequiredView
             } else if let kernel = agentKernel {
                 AIChatView(agentKernel: kernel)
+                    .withSidebarToggle()
             } else {
                 ProgressView("Loading AI Chat...")
             }

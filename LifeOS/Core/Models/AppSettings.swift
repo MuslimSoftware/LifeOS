@@ -7,14 +7,22 @@ class AppSettings {
     var selectedFont: String = "Lato-Regular"
     var fontSize: CGFloat = 18
     var currentRandomFont: String = ""
-    
+
+    var isSidebarCollapsed: Bool = false
+
     var currentTheme: Theme {
         colorScheme == .light ? .light : .dark
+    }
+
+    var sidebarWidth: CGFloat {
+        isSidebarCollapsed ? 0 : 160
     }
     
     init() {
         let savedScheme = UserDefaults.standard.string(forKey: "colorScheme") ?? "light"
         colorScheme = savedScheme == "dark" ? .dark : .light
+
+        isSidebarCollapsed = UserDefaults.standard.bool(forKey: "isSidebarCollapsed")
     }
     
     func toggleTheme() {
@@ -39,5 +47,10 @@ class AppSettings {
             let nextIndex = (currentIndex + 1) % sizes.count
             fontSize = sizes[nextIndex]
         }
+    }
+
+    func toggleSidebar() {
+        isSidebarCollapsed.toggle()
+        UserDefaults.standard.set(isSidebarCollapsed, forKey: "isSidebarCollapsed")
     }
 }
