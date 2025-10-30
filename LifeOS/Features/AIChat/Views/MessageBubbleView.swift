@@ -59,7 +59,7 @@ struct MessageBubbleView: View {
 
     private var markdownAttributedString: AttributedString {
         do {
-            var attributedString = try AttributedString(markdown: message.content, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace))
+            var attributedString = try AttributedString(markdown: message.content, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnly))
 
             // Apply text color to all text
             attributedString.foregroundColor = textColor

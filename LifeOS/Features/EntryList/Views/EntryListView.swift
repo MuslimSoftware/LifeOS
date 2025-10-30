@@ -4,9 +4,11 @@ import SwiftUI
 struct EntryListView: View {
     @Environment(EntryListViewModel.self) private var viewModel
     @Environment(EditorViewModel.self) private var editorViewModel
+    @Environment(SidebarHoverManager.self) private var hoverManager
     @Environment(\.theme) private var theme
-    
+
     @State private var isHoveringHistory = false
+    @State private var isHoveringPin = false
     
     let fileService: FileManagerService
     let pdfService: PDFExportService
@@ -15,33 +17,61 @@ struct EntryListView: View {
         @Bindable var vm = viewModel
         
         VStack(spacing: 0) {
-            Button(action: {
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: fileService.documentsDirectory.path)
-            }) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 4) {
-                            Text("History")
-                                .font(.system(size: 13))
-                                .foregroundColor(isHoveringHistory ? theme.buttonTextHover : theme.buttonText)
-                            Image(systemName: "arrow.up.right")
+            HStack {
+                Button(action: {
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: fileService.documentsDirectory.path)
+                }) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 4) {
+                                Text("History")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(isHoveringHistory ? theme.buttonTextHover : theme.buttonText)
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(isHoveringHistory ? theme.buttonTextHover : theme.buttonText)
+                            }
+                            Text(fileService.documentsDirectory.path)
                                 .font(.system(size: 10))
-                                .foregroundColor(isHoveringHistory ? theme.buttonTextHover : theme.buttonText)
+                                .foregroundColor(theme.secondaryText)
+                                .lineLimit(1)
                         }
-                        Text(fileService.documentsDirectory.path)
-                            .font(.system(size: 10))
-                            .foregroundColor(theme.secondaryText)
-                            .lineLimit(1)
+                        Spacer()
                     }
-                    Spacer()
                 }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    isHoveringHistory = hovering
+                }
+
+                Spacer()
+
+                Button(action: {
+                    hoverManager.toggleRightPin()
+                }) {
+                    Image(systemName: hoverManager.isRightSidebarPinned ? "pin.fill" : "pin.slash")
+                        .foregroundColor(isHoveringPin ? theme.buttonTextHover : theme.buttonText)
+                        .font(.system(size: 12))
+                        .frame(width: 28, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isHoveringPin ? theme.hoveredBackground : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    isHoveringPin = hovering
+                    if hovering {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+                .accessibilityLabel(hoverManager.isRightSidebarPinned ? "Unpin sidebar" : "Pin sidebar")
+                .help(hoverManager.isRightSidebarPinned ? "Unpin sidebar" : "Pin sidebar")
             }
-            .buttonStyle(.plain)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .onHover { hovering in
-                isHoveringHistory = hovering
-            }
             
             Divider()
             

@@ -10,8 +10,7 @@ class EntryListViewModel {
     var hoveredEntryId: UUID? = nil
     var hoveredTrashId: UUID? = nil
     var hoveredExportId: UUID? = nil
-    var showingSidebar = false
-    
+
     var expandedYears: Set<Int> = []
     var expandedMonths: Set<String> = []
     

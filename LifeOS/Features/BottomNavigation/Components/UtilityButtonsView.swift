@@ -7,7 +7,8 @@ struct UtilityButtonsView: View {
     @Environment(EntryListViewModel.self) private var entryListViewModel
     @Environment(AppSettings.self) private var settings
     @Environment(\.theme) private var theme
-    
+    @Environment(SidebarHoverManager.self) private var hoverManager
+
     @State private var isHoveringFullscreen = false
     @State private var isHoveringNewEntry = false
     @State private var isHoveringImport = false
@@ -18,8 +19,6 @@ struct UtilityButtonsView: View {
     let fileService: FileManagerService
     
     var body: some View {
-        @Bindable var entryListBindable = entryListViewModel
-        
         HStack(spacing: 8) {
             Button(editorViewModel.isFullscreen ? "Minimize" : "Fullscreen") {
                 if let window = NSApplication.shared.windows.first {
@@ -98,9 +97,7 @@ struct UtilityButtonsView: View {
                 .foregroundColor(theme.separatorColor)
             
             Button(action: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    entryListBindable.showingSidebar.toggle()
-                }
+                hoverManager.openRightSidebarWithPin()
             }) {
                 Image(systemName: "clock.arrow.circlepath")
                     .foregroundColor(isHoveringClock ? textHoverColor : textColor)

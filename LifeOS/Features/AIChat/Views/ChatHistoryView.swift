@@ -10,6 +10,7 @@ import SwiftUI
 /// Sidebar showing conversation list grouped by date
 struct ChatHistoryView: View {
     @Environment(\.theme) private var theme
+    @Environment(SidebarHoverManager.self) private var hoverManager
     let conversations: [Conversation]
     let currentConversationId: UUID?
     let onConversationTap: (UUID) -> Void
@@ -18,6 +19,7 @@ struct ChatHistoryView: View {
     let onNewConversation: () -> Void
 
     @State private var isHoveringNewChat = false
+    @State private var isHoveringPin = false
     @State private var hoveredConversationId: UUID?
     @State private var hoveredTrashId: UUID?
     @State private var hoveredCopyId: UUID?
@@ -25,32 +27,61 @@ struct ChatHistoryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // New Chat button
-            Button(action: onNewConversation) {
-                HStack {
-                    Image(systemName: "plus.bubble")
-                        .font(.system(size: 13))
-                        .foregroundColor(isHoveringNewChat ? theme.buttonTextHover : theme.buttonText)
-                    Text("New Chat")
-                        .font(.system(size: 13))
-                        .foregroundColor(isHoveringNewChat ? theme.buttonTextHover : theme.buttonText)
-                    Spacer()
+            // Top bar with New Chat button and Pin button
+            HStack {
+                // New Chat button
+                Button(action: onNewConversation) {
+                    HStack {
+                        Image(systemName: "plus.bubble")
+                            .font(.system(size: 13))
+                            .foregroundColor(isHoveringNewChat ? theme.buttonTextHover : theme.buttonText)
+                        Text("New Chat")
+                            .font(.system(size: 13))
+                            .foregroundColor(isHoveringNewChat ? theme.buttonTextHover : theme.buttonText)
+                    }
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("New Chat")
+                .accessibilityHint("Double tap to start a new conversation")
+                .accessibilityAddTraits(.isButton)
+                .onHover { hovering in
+                    isHoveringNewChat = hovering
+                    if hovering {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+
+                Spacer()
+
+                // Pin button
+                Button(action: {
+                    hoverManager.toggleRightPin()
+                }) {
+                    Image(systemName: hoverManager.isRightSidebarPinned ? "pin.fill" : "pin.slash")
+                        .foregroundColor(isHoveringPin ? theme.buttonTextHover : theme.buttonText)
+                        .font(.system(size: 12))
+                        .frame(width: 28, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isHoveringPin ? theme.hoveredBackground : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    isHoveringPin = hovering
+                    if hovering {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+                .accessibilityLabel(hoverManager.isRightSidebarPinned ? "Unpin sidebar" : "Pin sidebar")
+                .help(hoverManager.isRightSidebarPinned ? "Unpin sidebar" : "Pin sidebar")
             }
-            .buttonStyle(.plain)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .accessibilityLabel("New Chat")
-            .accessibilityHint("Double tap to start a new conversation")
-            .accessibilityAddTraits(.isButton)
-            .onHover { hovering in
-                isHoveringNewChat = hovering
-                if hovering {
-                    NSCursor.pointingHand.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
 
             Divider()
 
@@ -245,24 +276,13 @@ struct ConversationRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(
-            ZStack(alignment: .leading) {
-                // Background color based on state
-                (isSelected ? theme.selectedBackground : (isHovered ? theme.hoveredBackground : Color.clear))
-
-                // Selection indicator on the left
-                if isSelected {
-                    Rectangle()
-                        .fill(theme.accentColor)
-                        .frame(width: 3)
-                        .padding(.vertical, 2)
-                }
-            }
+            // Subtle background for both selected and hovered states
+            (isSelected || isHovered ? theme.hoveredBackground : Color.clear)
         )
         .contentShape(Rectangle())
         .onTapGesture {
             onTap()
         }
-        .animation(.easeInOut(duration: 0.15), value: isHovered)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Conversation: \(conversation.title)")
         .accessibilityValue("\(conversation.messages.count) messages, updated \(conversation.updatedAt.formatted(date: .omitted, time: .shortened))")

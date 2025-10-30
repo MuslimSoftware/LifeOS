@@ -16,7 +16,6 @@ class AIChatViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var error: String?
     @Published var toolsUsed: [String] = []
-    @Published var showingHistory: Bool = false
 
     private let agentKernel: AgentKernel
     private let persistenceService: ConversationPersistenceService

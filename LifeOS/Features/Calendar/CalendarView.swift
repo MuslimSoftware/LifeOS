@@ -250,6 +250,9 @@ struct CalendarView: View {
             .onChange(of: currentMonth) {
                 refreshTODOCounts()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .todosDidChange)) { _ in
+                refreshTODOCounts()
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.backgroundColor)

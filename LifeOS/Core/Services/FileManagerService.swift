@@ -572,8 +572,9 @@ class FileManagerService {
 
         do {
             try encryptedData.write(to: fileURL, options: .atomic)
+            print("✅ TODOs saved successfully for \(entry.filename)")
         } catch {
-            print("Error saving TODOs: \(error)")
+            print("❌ Failed to save TODOs: \(error)")
         }
     }
 }

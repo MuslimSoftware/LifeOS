@@ -9,52 +9,50 @@ enum NavigationRoute: String, CaseIterable {
 struct SidebarView: View {
     @Environment(\.theme) private var theme
     @Environment(AppSettings.self) private var settings
+    @Environment(SidebarHoverManager.self) private var hoverManager
     @Binding var selectedRoute: NavigationRoute
 
     @State private var hoveredRoute: NavigationRoute? = nil
     @State private var isHoveringThemeToggle = false
     @State private var isHoveringSettings = false
-    @State private var isHoveringClose = false
+    @State private var isHoveringPin = false
     @State private var showSettings = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            // Top section with close button
+            // Top section with pin button
             HStack {
-                Spacer()
                 Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        settings.toggleSidebar()
-                    }
-                    // Announce state change for VoiceOver
-                    NSAccessibility.post(element: NSApp.mainWindow as Any, notification: .announcementRequested, userInfo: [.announcement: "Sidebar hidden", .priority: NSAccessibilityPriorityLevel.high.rawValue])
+                    hoverManager.toggleLeftPin()
                 }) {
-                    Image(systemName: "xmark")
-                        .foregroundColor(isHoveringClose ? theme.buttonTextHover : theme.buttonText)
+                    Image(systemName: hoverManager.isLeftSidebarPinned ? "pin.fill" : "pin.slash")
+                        .foregroundColor(isHoveringPin ? theme.buttonTextHover : theme.buttonText)
                         .font(.system(size: 12))
                         .frame(width: 28, height: 28)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(isHoveringClose ? theme.hoveredBackground : Color.clear)
+                                .fill(isHoveringPin ? theme.hoveredBackground : Color.clear)
                         )
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
                 .onHover { hovering in
-                    isHoveringClose = hovering
+                    isHoveringPin = hovering
                     if hovering {
                         NSCursor.pointingHand.push()
                     } else {
                         NSCursor.pop()
                     }
                 }
-                .accessibilityLabel("Close sidebar")
-                .accessibilityHint("Double tap to close the sidebar")
+                .accessibilityLabel(hoverManager.isLeftSidebarPinned ? "Unpin sidebar" : "Pin sidebar")
+                .accessibilityHint("Double tap to toggle sidebar pinning")
                 .accessibilityAddTraits(.isButton)
-                .help("Close sidebar")
+                .help(hoverManager.isLeftSidebarPinned ? "Unpin sidebar" : "Pin sidebar")
+
+                Spacer()
             }
             .padding(.top, 12)
-            .padding(.trailing, 4)
+            .padding(.leading, 4)
 
             Spacer()
                 .frame(height: 12)

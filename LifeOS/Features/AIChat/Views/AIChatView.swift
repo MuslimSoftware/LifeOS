@@ -11,6 +11,7 @@ import AppKit
 /// Full-screen AI chat interface with conversation history
 struct AIChatView: View {
     @Environment(\.theme) private var theme
+    @Environment(SidebarHoverManager.self) private var hoverManager
     @StateObject private var viewModel: AIChatViewModel
     @State private var messageText: String = ""
     @State private var isHoveringHistoryButton = false
@@ -48,6 +49,31 @@ struct AIChatView: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
+                // Top bar with history button
+                HStack {
+                    Spacer()
+
+                    Button(action: {
+                        hoverManager.openRightSidebarWithPin()
+                    }) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 13))
+                            .foregroundColor(isHoveringHistoryButton ? theme.buttonTextHover : theme.buttonText)
+                            .padding(8)
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hovering in
+                        isHoveringHistoryButton = hovering
+                        if hovering {
+                            NSCursor.pointingHand.push()
+                        } else {
+                            NSCursor.pop()
+                        }
+                    }
+                }
+                .padding(.top, 16)
+                .padding(.trailing, 16)
+
                 // Messages
                 messagesView
 
@@ -68,19 +94,10 @@ struct AIChatView: View {
                     },
                     isLoading: viewModel.isLoading
                 )
-
-                // Bottom row with buttons
-                HStack {
-                    Spacer()
-                    bottomRightButtons
-                }
-                .padding(.horizontal)
-                .padding(.bottom)
-                .frame(height: 60)
             }
             .background(theme.surfaceColor)
 
-            if viewModel.showingHistory {
+            if hoverManager.isRightSidebarOpen {
                 Divider()
 
                 ChatHistoryView(
@@ -101,7 +118,7 @@ struct AIChatView: View {
                 )
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: viewModel.showingHistory)
+        .animation(.easeInOut(duration: 0.2), value: hoverManager.isRightSidebarOpen)
     }
 
     private var messagesView: some View {
@@ -278,33 +295,6 @@ struct AIChatView: View {
         let pasteboard = AppKit.NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(conversationText, forType: AppKit.NSPasteboard.PasteboardType.string)
-    }
-
-    private var bottomRightButtons: some View {
-        HStack(spacing: 8) {
-            // History button
-            Button(action: {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    viewModel.showingHistory.toggle()
-                }
-            }) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 13))
-                    .foregroundColor(isHoveringHistoryButton ? theme.buttonTextHover : theme.buttonText)
-                    .padding(8)
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                isHoveringHistoryButton = hovering
-                if hovering {
-                    NSCursor.pointingHand.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
-        }
-        .padding(8)
-        .cornerRadius(6)
     }
 }
 

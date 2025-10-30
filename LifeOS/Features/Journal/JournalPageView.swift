@@ -3,6 +3,7 @@ import SwiftUI
 struct JournalPageView: View {
     @Environment(EditorViewModel.self) private var editorViewModel
     @Environment(EntryListViewModel.self) private var entryListViewModel
+    @Environment(SidebarHoverManager.self) private var hoverManager
     @Environment(\.theme) private var theme
     
     let pdfService: PDFExportService
@@ -30,16 +31,16 @@ struct JournalPageView: View {
                 }
             }
             
-            if entryListViewModel.showingSidebar {
+            if hoverManager.isRightSidebarOpen {
                 Divider()
-                
+
                 EntryListView(
                     fileService: fileService,
                     pdfService: pdfService
                 )
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: entryListViewModel.showingSidebar)
+        .animation(.easeInOut(duration: 0.2), value: hoverManager.isRightSidebarOpen)
         .onChange(of: selectedDate) { _, newDate in
             updateCurrentEntryDate(newDate)
         }

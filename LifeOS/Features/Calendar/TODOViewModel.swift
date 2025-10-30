@@ -1,5 +1,9 @@
 import Foundation
 
+extension Notification.Name {
+    static let todosDidChange = Notification.Name("todosDidChange")
+}
+
 @Observable
 class TODOViewModel {
     var todos: [TODOItem] = []
@@ -87,5 +91,12 @@ class TODOViewModel {
     func saveTODOs() {
         guard let entry = currentEntry else { return }
         fileService.saveTODOs(todos, for: entry)
+
+        // Notify that TODOs changed
+        NotificationCenter.default.post(
+            name: .todosDidChange,
+            object: nil,
+            userInfo: ["entryId": entry.id, "date": selectedDate as Any]
+        )
     }
 }
