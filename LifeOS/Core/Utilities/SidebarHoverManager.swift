@@ -42,8 +42,7 @@ class SidebarHoverManager {
     }
 
     private func handleMouseMove(_ event: NSEvent) {
-        guard let window = NSApp.mainWindow,
-              let screen = window.screen else { return }
+        guard let window = NSApp.mainWindow else { return }
 
         let mouseLocation = NSEvent.mouseLocation
         let windowFrame = window.frame

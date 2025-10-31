@@ -38,7 +38,7 @@ class TODOViewModel {
             fileService.saveEntry(currentEntry!, content: "")
         }
 
-        guard let entry = currentEntry else { return }
+        guard currentEntry != nil else { return }
 
         let newTODO = TODOItem(text: text, completed: false)
         todos.append(newTODO)

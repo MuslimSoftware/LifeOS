@@ -66,7 +66,7 @@ class HybridRanker {
             totalScore += weights.recency * recencyDecay
 
             // 3. Keyword component
-            if let keyword = query.filter?.keyword {
+            if query.filter?.keyword != nil {
                 let keywordScore = bm25Scores[chunk.id.uuidString] ?? 0.0
                 components.keywordMatch = keywordScore
                 totalScore += weights.keyword * keywordScore

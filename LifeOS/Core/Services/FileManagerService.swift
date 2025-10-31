@@ -463,7 +463,7 @@ class FileManagerService {
     }
 
     func exportAllEntriesPlaintext(to destinationURL: URL) -> Bool {
-        guard let encryptionKey = KeychainService.shared.getOrCreateEncryptionKey() else {
+        guard KeychainService.shared.getOrCreateEncryptionKey() != nil else {
             print("Error: Could not get encryption key for export")
             return false
         }
