@@ -22,6 +22,8 @@ struct MessageBubbleView: View {
                 // Message content
                 Text(markdownAttributedString)
                     .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
                     .background(bubbleColor)
                     .foregroundColor(textColor)
@@ -58,17 +60,49 @@ struct MessageBubbleView: View {
     }
 
     private var markdownAttributedString: AttributedString {
-        do {
-            var attributedString = try AttributedString(markdown: message.content, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnly))
+        // Pre-process content to style headers while preserving line breaks
+        let processedContent = message.content
+        var attributedString = AttributedString()
 
-            // Apply text color to all text
-            attributedString.foregroundColor = textColor
+        // Split by lines to process headers
+        let lines = processedContent.components(separatedBy: "\n")
 
-            return attributedString
-        } catch {
-            // Fallback to plain text if markdown parsing fails
-            return AttributedString(message.content)
+        for (index, line) in lines.enumerated() {
+            var lineAttr: AttributedString
+
+            // Check if line is a header
+            if line.hasPrefix("### ") {
+                let headerText = line.replacingOccurrences(of: "### ", with: "")
+                lineAttr = AttributedString(headerText)
+                lineAttr.font = .system(size: 17, weight: .semibold)
+            } else if line.hasPrefix("## ") {
+                let headerText = line.replacingOccurrences(of: "## ", with: "")
+                lineAttr = AttributedString(headerText)
+                lineAttr.font = .system(size: 20, weight: .bold)
+            } else if line.hasPrefix("# ") {
+                let headerText = line.replacingOccurrences(of: "# ", with: "")
+                lineAttr = AttributedString(headerText)
+                lineAttr.font = .system(size: 24, weight: .bold)
+            } else {
+                // Parse line with inline markdown (bold, italic, etc.) while preserving whitespace
+                let options = AttributedString.MarkdownParsingOptions(
+                    interpretedSyntax: .inlineOnlyPreservingWhitespace
+                )
+                lineAttr = (try? AttributedString(markdown: line, options: options)) ?? AttributedString(line)
+            }
+
+            attributedString.append(lineAttr)
+
+            // Add newline between lines (except after last line)
+            if index < lines.count - 1 {
+                attributedString.append(AttributedString("\n"))
+            }
         }
+
+        // Apply text color to all text
+        attributedString.foregroundColor = textColor
+
+        return attributedString
     }
 }
 

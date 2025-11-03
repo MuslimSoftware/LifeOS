@@ -89,14 +89,41 @@ class TODOViewModel {
     }
 
     func saveTODOs() {
+        // If no currentEntry but we have a selectedDate, create/find the entry
+        if currentEntry == nil, let date = selectedDate {
+            if let existingFilename = fileService.findExistingFileForDate(date: date),
+               let uuidMatch = existingFilename.range(of: "\\[(.*?)\\]", options: .regularExpression),
+               let uuid = UUID(uuidString: String(existingFilename[uuidMatch].dropFirst().dropLast())) {
+                // Found existing file
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "MMM d"
+                let displayDate = dateFormatter.string(from: date)
+                let year = Calendar.current.component(.year, from: date)
+
+                currentEntry = HumanEntry(
+                    id: uuid,
+                    date: displayDate,
+                    filename: existingFilename,
+                    previewText: "",
+                    year: year
+                )
+            } else {
+                // Create new entry file
+                currentEntry = HumanEntry.createWithDate(date: date)
+                fileService.saveEntry(currentEntry!, content: "")
+            }
+        }
+
         guard let entry = currentEntry else { return }
         fileService.saveTODOs(todos, for: entry)
 
-        // Notify that TODOs changed
-        NotificationCenter.default.post(
-            name: .todosDidChange,
-            object: nil,
-            userInfo: ["entryId": entry.id, "date": selectedDate as Any]
-        )
+        // Ensure notification is posted on main thread
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: .todosDidChange,
+                object: nil,
+                userInfo: ["entryId": entry.id, "date": self.selectedDate as Any]
+            )
+        }
     }
 }

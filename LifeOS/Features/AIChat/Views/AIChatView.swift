@@ -94,6 +94,7 @@ struct AIChatView: View {
                     },
                     isLoading: viewModel.isLoading
                 )
+                .padding(.bottom, 50)
             }
             .background(theme.surfaceColor)
 
@@ -153,7 +154,7 @@ struct AIChatView: View {
                         .frame(height: 1)
                         .id("bottomMarker")
                 }
-                .frame(maxWidth: 700)
+                .frame(maxWidth: 800)
                 .padding(.top, 24)
                 .padding(.bottom, 24)
             }

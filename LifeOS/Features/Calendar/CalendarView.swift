@@ -244,8 +244,17 @@ struct CalendarView: View {
             .onChange(of: selectedDay) {
                 updateTODOsForSelectedDay()
             }
-            .onChange(of: todoViewModel?.todos) {
-                refreshTODOCounts()
+            .onChange(of: todoViewModel?.todos.count) { oldValue, newValue in
+                // When todo count changes (add/delete), update calendar
+                if let selectedDay = selectedDay {
+                    updateTODOCountsForDate(selectedDay)
+                }
+            }
+            .onChange(of: todoViewModel?.todos.map { $0.completed }) { oldValue, newValue in
+                // When completion states change, update calendar
+                if let selectedDay = selectedDay {
+                    updateTODOCountsForDate(selectedDay)
+                }
             }
             .onChange(of: currentMonth) {
                 refreshTODOCounts()
@@ -411,6 +420,23 @@ struct CalendarView: View {
         let entries = entriesForSelectedDay(selectedDay)
         let entry = entries.first
         todoViewModel?.loadTODOs(for: entry, date: selectedDay)
+
+        // Update calendar counts for this day after loading
+        updateTODOCountsForDate(selectedDay)
+    }
+
+    private func updateTODOCountsForDate(_ date: Date) {
+        guard let todos = todoViewModel?.todos else { return }
+
+        let incomplete = todos.filter { !$0.completed }.count
+        let completed = todos.filter { $0.completed }.count
+
+        let key = dateKey(for: date)
+        if incomplete > 0 || completed > 0 {
+            todoCounts[key] = (incomplete, completed)
+        } else {
+            todoCounts.removeValue(forKey: key)
+        }
     }
 
     private func refreshTODOCounts() {
