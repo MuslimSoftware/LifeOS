@@ -27,62 +27,50 @@ struct BottomNavigationView: View {
             Spacer()
             
             HStack(spacing: 8) {
-                Text(monthOnlyString)
-                    .font(.system(size: 13))
-                    .foregroundColor(hoveredDateControl == "month" ? theme.buttonTextHover : theme.buttonText)
-                    .padding(.horizontal, 8)
-                    .onHover { hovering in
-                        hoveredDateControl = hovering ? "month" : nil
-                        vm.isHoveringBottomNav = hovering
-                        if hovering {
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
-                        }
-                    }
-                
+                ScrollableValueControl.month(
+                    date: selectedDate,
+                    hoveredControl: $hoveredDateControl,
+                    scrollAccumulator: $scrollAccumulator,
+                    onAdjust: adjustMonth
+                )
+                .onHover { hovering in
+                    vm.isHoveringBottomNav = hovering
+                }
+
                 Text("•")
                     .foregroundColor(theme.separatorColor)
-                
-                Text(dayString)
-                    .font(.system(size: 13))
-                    .foregroundColor(hoveredDateControl == "day" ? theme.buttonTextHover : theme.buttonText)
-                    .padding(.horizontal, 8)
-                    .onHover { hovering in
-                        hoveredDateControl = hovering ? "day" : nil
-                        vm.isHoveringBottomNav = hovering
-                        if hovering {
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
-                        }
-                    }
-                
+
+                ScrollableValueControl.day(
+                    date: selectedDate,
+                    hoveredControl: $hoveredDateControl,
+                    scrollAccumulator: $scrollAccumulator,
+                    onAdjust: adjustDay
+                )
+                .onHover { hovering in
+                    vm.isHoveringBottomNav = hovering
+                }
+
                 Text("•")
                     .foregroundColor(theme.separatorColor)
-                
-                Text(verbatim: yearString)
-                    .font(.system(size: 13))
-                    .foregroundColor(hoveredDateControl == "year" ? theme.buttonTextHover : theme.buttonText)
-                    .padding(.horizontal, 8)
-                    .onHover { hovering in
-                        hoveredDateControl = hovering ? "year" : nil
-                        vm.isHoveringBottomNav = hovering
-                        if hovering {
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
-                        }
-                    }
-                
+
+                ScrollableValueControl.year(
+                    date: selectedDate,
+                    hoveredControl: $hoveredDateControl,
+                    scrollAccumulator: $scrollAccumulator,
+                    onAdjust: adjustYear
+                )
+                .onHover { hovering in
+                    vm.isHoveringBottomNav = hovering
+                }
+
                 Text("•")
                     .foregroundColor(theme.separatorColor)
-                
+
                 TimerButtonView(isHoveringBottomNav: $vm.isHoveringBottomNav)
-                
+
                 Text("•")
                     .foregroundColor(theme.separatorColor)
-                
+
                 UtilityButtonsView(isHoveringBottomNav: $vm.isHoveringBottomNav, fileService: fileService)
             }
             .padding(8)
@@ -108,26 +96,14 @@ struct BottomNavigationView: View {
         }
         .onAppear {
             NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-                if hoveredDateControl == "month" || hoveredDateControl == "day" || hoveredDateControl == "year" {
+                if hoveredDateControl != nil {
                     scrollAccumulator += event.deltaY
-                    
+
                     if scrollAccumulator > 3 {
-                        if hoveredDateControl == "month" {
-                            adjustMonth(by: 1)
-                        } else if hoveredDateControl == "day" {
-                            adjustDay(by: 1)
-                        } else if hoveredDateControl == "year" {
-                            adjustYear(by: 1)
-                        }
+                        handleScroll(direction: 1)
                         scrollAccumulator = 0
                     } else if scrollAccumulator < -3 {
-                        if hoveredDateControl == "month" {
-                            adjustMonth(by: -1)
-                        } else if hoveredDateControl == "day" {
-                            adjustDay(by: -1)
-                        } else if hoveredDateControl == "year" {
-                            adjustYear(by: -1)
-                        }
+                        handleScroll(direction: -1)
                         scrollAccumulator = 0
                     }
                     return nil
@@ -136,23 +112,18 @@ struct BottomNavigationView: View {
             }
         }
     }
-    
-    private var monthOnlyString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM"
-        return formatter.string(from: selectedDate)
-    }
-    
-    private var dayString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d"
-        return formatter.string(from: selectedDate)
-    }
-    
-    private var yearString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy"
-        return formatter.string(from: selectedDate)
+
+    private func handleScroll(direction: Int) {
+        switch hoveredDateControl {
+        case "month":
+            adjustMonth(by: direction)
+        case "day":
+            adjustDay(by: direction)
+        case "year":
+            adjustYear(by: direction)
+        default:
+            break
+        }
     }
     
     private func adjustMonth(by value: Int) {

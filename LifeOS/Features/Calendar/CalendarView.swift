@@ -19,87 +19,117 @@ struct CalendarView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            VStack(spacing: 0) {
+            ZStack {
                 VStack(spacing: 0) {
-                    Text(monthString)
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(theme.primaryText)
-                        .padding(.top, 40)
-                        .padding(.bottom, 40)
+                    VStack(spacing: 0) {
+                        Text(monthString)
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(theme.primaryText)
+                            .padding(.top, 40)
+                            .padding(.bottom, 40)
 
-                    VStack(spacing: 12) {
-                        HStack(spacing: 0) {
-                            ForEach(daysOfWeek, id: \.self) { day in
-                                Text(day)
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(theme.secondaryText)
-                                    .frame(maxWidth: .infinity)
+                        VStack(spacing: 12) {
+                            HStack(spacing: 0) {
+                                ForEach(daysOfWeek, id: \.self) { day in
+                                    Text(day)
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(theme.secondaryText)
+                                        .frame(maxWidth: .infinity)
+                                }
                             }
-                        }
 
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
-                            ForEach(Array(daysInMonth.enumerated()), id: \.offset) { index, day in
-                                if let day = day {
-                                    let todoCounts = todosForDay(day)
-                                    DayCell(
-                                        day: day,
-                                        hasEntry: hasEntry(for: day),
-                                        isToday: isToday(day),
-                                        isSelected: isSelected(day),
-                                        theme: theme,
-                                        incompleteTodoCount: todoCounts.incomplete,
-                                        completedTodoCount: todoCounts.completed
-                                    )
-                                    .frame(height: 80)
-                                    .frame(maxWidth: .infinity)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        selectedDay = day
-                                    }
-                                } else {
-                                    Color.clear
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
+                                ForEach(Array(daysInMonth.enumerated()), id: \.offset) { index, day in
+                                    if let day = day {
+                                        let todoCounts = todosForDay(day)
+                                        DayCell(
+                                            day: day,
+                                            hasEntry: hasEntry(for: day),
+                                            isToday: isToday(day),
+                                            isSelected: isSelected(day),
+                                            theme: theme,
+                                            incompleteTodoCount: todoCounts.incomplete,
+                                            completedTodoCount: todoCounts.completed
+                                        )
                                         .frame(height: 80)
+                                        .frame(maxWidth: .infinity)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            selectedDay = day
+                                        }
+                                    } else {
+                                        Color.clear
+                                            .frame(height: 80)
+                                    }
                                 }
                             }
                         }
+                        .padding(.horizontal, 40)
                     }
-                    .padding(.horizontal, 40)
-                }
 
-                VStack(spacing: 0) {
-                    if let selectedDay = selectedDay, let todoVM = todoViewModel {
-                        HStack(spacing: 0) {
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text("Journal")
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundColor(theme.primaryText)
-                                    .padding(.horizontal, 40)
-                                    .padding(.top, 24)
-                                    .padding(.bottom, 16)
+                    VStack(spacing: 0) {
+                        if let selectedDay = selectedDay, let todoVM = todoViewModel {
+                            HStack(spacing: 0) {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text("Journal")
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .foregroundColor(theme.primaryText)
+                                        .padding(.horizontal, 40)
+                                        .padding(.top, 24)
+                                        .padding(.bottom, 16)
 
-                                if !entriesForSelectedDay(selectedDay).isEmpty {
-                                    ScrollView {
-                                        VStack(alignment: .leading, spacing: 12) {
-                                            ForEach(entriesForSelectedDay(selectedDay)) { entry in
-                                                VStack(alignment: .leading, spacing: 6) {
-                                                    if !entry.previewText.isEmpty {
-                                                        Text(entry.previewText)
-                                                            .font(.system(size: 14))
-                                                            .foregroundColor(theme.primaryText)
-                                                            .lineLimit(1)
-                                                    } else {
-                                                        Text("Empty entry")
-                                                            .font(.system(size: 14))
-                                                            .foregroundColor(theme.tertiaryText)
-                                                            .italic()
+                                    if !entriesForSelectedDay(selectedDay).isEmpty {
+                                        ScrollView {
+                                            VStack(alignment: .leading, spacing: 12) {
+                                                ForEach(entriesForSelectedDay(selectedDay)) { entry in
+                                                    VStack(alignment: .leading, spacing: 6) {
+                                                        if !entry.previewText.isEmpty {
+                                                            Text(entry.previewText)
+                                                                .font(.system(size: 14))
+                                                                .foregroundColor(theme.primaryText)
+                                                                .lineLimit(1)
+                                                        } else {
+                                                            Text("Empty entry")
+                                                                .font(.system(size: 14))
+                                                                .foregroundColor(theme.tertiaryText)
+                                                                .italic()
+                                                        }
                                                     }
+                                                    .padding(16)
+                                                    .background(theme.dividerColor.opacity(0.15))
+                                                    .cornerRadius(8)
+                                                    .onTapGesture {
+                                                        openEntry(entry)
+                                                    }
+                                                    .onHover { hovering in
+                                                        if hovering {
+                                                            NSCursor.pointingHand.push()
+                                                        } else {
+                                                            NSCursor.pop()
+                                                        }
+                                                    }
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
                                                 }
-                                                .padding(16)
-                                                .background(theme.dividerColor.opacity(0.15))
-                                                .cornerRadius(8)
-                                                .onTapGesture {
-                                                    openEntry(entry)
+                                            }
+                                            .padding(.horizontal, 40)
+                                            .padding(.bottom, 20)
+                                        }
+                                        .frame(height: 180)
+                                    } else {
+                                        ScrollView {
+                                            VStack(alignment: .leading, spacing: 12) {
+                                                Button(action: {
+                                                    createJournalForSelectedDay()
+                                                }) {
+                                                    Image(systemName: "plus.circle")
+                                                        .font(.system(size: 16))
+                                                        .foregroundColor(theme.secondaryText)
+                                                        .padding(12)
+                                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                                        .background(theme.dividerColor.opacity(0.1))
+                                                        .cornerRadius(8)
                                                 }
+                                                .buttonStyle(.plain)
                                                 .onHover { hovering in
                                                     if hovering {
                                                         NSCursor.pointingHand.push()
@@ -107,109 +137,77 @@ struct CalendarView: View {
                                                         NSCursor.pop()
                                                     }
                                                 }
-                                                .frame(maxWidth: .infinity, alignment: .leading)
                                             }
+                                            .padding(.horizontal, 40)
+                                            .padding(.bottom, 20)
                                         }
-                                        .padding(.horizontal, 40)
-                                        .padding(.bottom, 20)
+                                        .frame(height: 180)
                                     }
-                                    .frame(height: 180)
-                                } else {
-                                    ScrollView {
-                                        VStack(alignment: .leading, spacing: 12) {
-                                            Button(action: {
-                                                createJournalForSelectedDay()
-                                            }) {
-                                                Image(systemName: "plus.circle")
-                                                    .font(.system(size: 16))
-                                                    .foregroundColor(theme.secondaryText)
-                                                    .padding(12)
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                                    .background(theme.dividerColor.opacity(0.1))
-                                                    .cornerRadius(8)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .onHover { hovering in
-                                                if hovering {
-                                                    NSCursor.pointingHand.push()
-                                                } else {
-                                                    NSCursor.pop()
-                                                }
-                                            }
-                                        }
-                                        .padding(.horizontal, 40)
-                                        .padding(.bottom, 20)
-                                    }
-                                    .frame(height: 180)
                                 }
-                            }
-                            .frame(maxWidth: .infinity)
-
-                            TODOListView()
-                                .environment(todoVM)
                                 .frame(maxWidth: .infinity)
+
+                                TODOListView()
+                                    .environment(todoVM)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        } else {
+                            Color.clear
                         }
-                    } else {
-                        Color.clear
                     }
+                    .frame(height: 220)
+
+                    Spacer()
+                        .frame(height: 60)
                 }
-                .frame(height: 220)
 
-                Spacer()
-
-                HStack {
+                VStack {
                     Spacer()
 
-                    HStack(spacing: 20) {
-                        Text(monthString)
-                        .font(.system(size: 13))
-                        .foregroundColor(hoveredControl == "month" ? theme.buttonTextHover : theme.buttonText)
-                        .onHover { hovering in
-                            hoveredControl = hovering ? "month" : nil
-                            if hovering {
-                                NSCursor.pointingHand.push()
-                            } else {
-                                NSCursor.pop()
+                    HStack {
+                        Spacer()
+
+                        HStack(spacing: 20) {
+                            ScrollableValueControl.month(
+                                date: currentMonth,
+                                hoveredControl: $hoveredControl,
+                                scrollAccumulator: $scrollAccumulator,
+                                onAdjust: adjustMonth
+                            )
+
+                            Text("•")
+                                .foregroundColor(theme.separatorColor)
+
+                            ScrollableValueControl.year(
+                                date: currentMonth,
+                                hoveredControl: $hoveredControl,
+                                scrollAccumulator: $scrollAccumulator,
+                                onAdjust: adjustYear
+                            )
+
+                            Text("•")
+                                .foregroundColor(theme.separatorColor)
+
+                            Button(action: goToToday) {
+                                Text("Today")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(hoveredControl == "today" ? theme.buttonTextHover : theme.buttonText)
+                            }
+                            .buttonStyle(.plain)
+                            .onHover { hovering in
+                                hoveredControl = hovering ? "today" : nil
+                                if hovering {
+                                    NSCursor.pointingHand.push()
+                                } else {
+                                    NSCursor.pop()
+                                }
                             }
                         }
-
-                    Text("•")
-                        .foregroundColor(theme.separatorColor)
-
-                    Text(verbatim: yearString)
-                        .font(.system(size: 13))
-                        .foregroundColor(hoveredControl == "year" ? theme.buttonTextHover : theme.buttonText)
-                        .onHover { hovering in
-                            hoveredControl = hovering ? "year" : nil
-                            if hovering {
-                                NSCursor.pointingHand.push()
-                            } else {
-                                NSCursor.pop()
-                            }
-                        }
-
-                    Text("•")
-                        .foregroundColor(theme.separatorColor)
-
-                    Button(action: goToToday) {
-                        Text("Today")
-                            .font(.system(size: 13))
-                            .foregroundColor(hoveredControl == "today" ? theme.buttonTextHover : theme.buttonText)
+                        .padding(8)
                     }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        hoveredControl = hovering ? "today" : nil
-                        if hovering {
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
-                        }
-                    }
-                    }
-                    .padding(8)
+                    .padding()
+                    .frame(height: 60)
+                    .background(theme.backgroundColor)
                 }
-                .padding()
-                .frame(height: 60)
             }
             .onAppear {
                 if todoViewModel == nil {
@@ -245,13 +243,11 @@ struct CalendarView: View {
                 updateTODOsForSelectedDay()
             }
             .onChange(of: todoViewModel?.todos.count) { oldValue, newValue in
-                // When todo count changes (add/delete), update calendar
                 if let selectedDay = selectedDay {
                     updateTODOCountsForDate(selectedDay)
                 }
             }
             .onChange(of: todoViewModel?.todos.map { $0.completed }) { oldValue, newValue in
-                // When completion states change, update calendar
                 if let selectedDay = selectedDay {
                     updateTODOCountsForDate(selectedDay)
                 }

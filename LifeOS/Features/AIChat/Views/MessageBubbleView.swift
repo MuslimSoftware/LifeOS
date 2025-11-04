@@ -43,6 +43,7 @@ struct MessageBubbleView: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
+            .frame(maxWidth: 600)
 
             if message.role == .assistant {
                 Spacer(minLength: 50)
