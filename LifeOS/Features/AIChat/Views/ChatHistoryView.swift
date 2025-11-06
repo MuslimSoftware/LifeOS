@@ -213,49 +213,46 @@ struct ConversationRow: View {
 
                 Spacer(minLength: 0)
 
-                if isHovered {
-                    HStack(spacing: 8) {
-                        Button(action: onCopy) {
-                            Image(systemName: "doc.on.clipboard")
-                                .font(.system(size: 11))
-                                .foregroundColor(hoveredCopyId == conversation.id ? theme.buttonTextHover : theme.secondaryText)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Copy conversation")
-                        .accessibilityHint("Double tap to copy conversation to clipboard")
-                        .accessibilityAddTraits(.isButton)
-                        .onHover { hovering in
-                            onCopyHover(hovering)
-                            if hovering {
-                                NSCursor.pointingHand.push()
-                            } else {
-                                NSCursor.pop()
-                            }
-                        }
-
-                        Button(action: onDelete) {
-                            Image(systemName: "trash")
-                                .font(.system(size: 11))
-                                .foregroundColor(hoveredTrashId == conversation.id ? theme.destructive : theme.secondaryText)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Delete conversation")
-                        .accessibilityHint("Double tap to delete this conversation")
-                        .accessibilityAddTraits(.isButton)
-                        .onHover { hovering in
-                            onTrashHover(hovering)
-                            if hovering {
-                                NSCursor.pointingHand.push()
-                            } else {
-                                NSCursor.pop()
-                            }
+                HStack(spacing: 8) {
+                    Button(action: onCopy) {
+                        Image(systemName: "doc.on.clipboard")
+                            .font(.system(size: 11))
+                            .foregroundColor(hoveredCopyId == conversation.id ? theme.buttonTextHover : theme.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Copy conversation")
+                    .accessibilityHint("Double tap to copy conversation to clipboard")
+                    .accessibilityAddTraits(.isButton)
+                    .onHover { hovering in
+                        onCopyHover(hovering)
+                        if hovering {
+                            NSCursor.pointingHand.push()
+                        } else {
+                            NSCursor.pop()
                         }
                     }
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 0.8)),
-                        removal: .opacity
-                    ))
+
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11))
+                            .foregroundColor(hoveredTrashId == conversation.id ? theme.destructive : theme.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Delete conversation")
+                    .accessibilityHint("Double tap to delete this conversation")
+                    .accessibilityAddTraits(.isButton)
+                    .onHover { hovering in
+                        onTrashHover(hovering)
+                        if hovering {
+                            NSCursor.pointingHand.push()
+                        } else {
+                            NSCursor.pop()
+                        }
+                    }
                 }
+                .frame(width: isHovered ? nil : 0)
+                .clipped()
+                .opacity(isHovered ? 1.0 : 0.0)
             }
 
             HStack(spacing: 4) {
