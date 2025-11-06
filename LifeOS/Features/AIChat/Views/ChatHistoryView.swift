@@ -57,9 +57,9 @@ struct ChatHistoryView: View {
 
                 // Pin button
                 Button(action: {
-                    hoverManager.toggleRightPin()
+                    hoverManager.toggleRightPin(for: .aiChat)
                 }) {
-                    Image(systemName: hoverManager.isRightSidebarPinned ? "pin.fill" : "pin.slash")
+                    Image(systemName: hoverManager.isRightSidebarPinned(for: .aiChat) ? "pin.fill" : "pin.slash")
                         .foregroundColor(isHoveringPin ? theme.buttonTextHover : theme.buttonText)
                         .font(.system(size: 12))
                         .frame(width: 28, height: 28)
@@ -77,8 +77,8 @@ struct ChatHistoryView: View {
                         NSCursor.pop()
                     }
                 }
-                .accessibilityLabel(hoverManager.isRightSidebarPinned ? "Unpin sidebar" : "Pin sidebar")
-                .help(hoverManager.isRightSidebarPinned ? "Unpin sidebar" : "Pin sidebar")
+                .accessibilityLabel(hoverManager.isRightSidebarPinned(for: .aiChat) ? "Unpin sidebar" : "Pin sidebar")
+                .help(hoverManager.isRightSidebarPinned(for: .aiChat) ? "Unpin sidebar" : "Pin sidebar")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)

@@ -97,7 +97,7 @@ struct UtilityButtonsView: View {
                 .foregroundColor(theme.separatorColor)
             
             Button(action: {
-                hoverManager.openRightSidebarWithPin()
+                hoverManager.openRightSidebarWithPin(for: .journal)
             }) {
                 Image(systemName: "clock.arrow.circlepath")
                     .foregroundColor(isHoveringClock ? textHoverColor : textColor)

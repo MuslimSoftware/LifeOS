@@ -54,7 +54,7 @@ struct AIChatView: View {
                     Spacer()
 
                     Button(action: {
-                        hoverManager.openRightSidebarWithPin()
+                        hoverManager.openRightSidebarWithPin(for: .aiChat)
                     }) {
                         Image(systemName: "clock.arrow.circlepath")
                             .font(.system(size: 13))
@@ -98,7 +98,7 @@ struct AIChatView: View {
             }
             .background(theme.surfaceColor)
 
-            if hoverManager.isRightSidebarOpen {
+            if hoverManager.isRightSidebarOpen(for: .aiChat) {
                 Divider()
 
                 ChatHistoryView(
@@ -119,7 +119,7 @@ struct AIChatView: View {
                 )
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: hoverManager.isRightSidebarOpen)
+        .animation(.easeInOut(duration: 0.2), value: hoverManager.isRightSidebarOpen(for: .aiChat))
     }
 
     private var messagesView: some View {

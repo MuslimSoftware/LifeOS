@@ -16,11 +16,11 @@ struct JournalPageView: View {
             ZStack {
                 theme.backgroundColor
                     .ignoresSafeArea()
-                
+
                 EditorView()
                     .padding(.bottom, editorViewModel.bottomNavOpacity > 0 ? 68 : 0)
                     .ignoresSafeArea()
-                
+
                 VStack {
                     Spacer()
                     BottomNavigationView(
@@ -30,8 +30,15 @@ struct JournalPageView: View {
                     )
                 }
             }
-            
-            if hoverManager.isRightSidebarOpen {
+            .overlay(
+                EdgeHintView(
+                    isLeftEdge: false,
+                    isVisible: !hoverManager.isRightSidebarOpen(for: .journal)
+                        && !hoverManager.isRightSidebarPinned(for: .journal)
+                )
+            )
+
+            if hoverManager.isRightSidebarOpen(for: .journal) {
                 Divider()
 
                 EntryListView(
@@ -40,7 +47,7 @@ struct JournalPageView: View {
                 )
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: hoverManager.isRightSidebarOpen)
+        .animation(.easeInOut(duration: 0.2), value: hoverManager.isRightSidebarOpen(for: .journal))
         .onChange(of: selectedDate) { _, newDate in
             updateCurrentEntryDate(newDate)
         }

@@ -18,6 +18,34 @@ struct EntryListView: View {
         
         VStack(spacing: 0) {
             HStack {
+                // Pin button (now on the left/inner edge)
+                Button(action: {
+                    hoverManager.toggleRightPin(for: .journal)
+                }) {
+                    Image(systemName: hoverManager.isRightSidebarPinned(for: .journal) ? "chevron.right.2" : "line.horizontal.3")
+                        .foregroundColor(isHoveringPin ? theme.buttonTextHover : theme.buttonText)
+                        .font(.system(size: 12))
+                        .frame(width: 28, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isHoveringPin ? theme.hoveredBackground : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    isHoveringPin = hovering
+                    if hovering {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+                .accessibilityLabel("Toggle sidebar pin")
+                .help("Toggle sidebar pin")
+
+                Spacer()
+
+                // History button (now on the right/outer edge)
                 Button(action: {
                     NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: fileService.documentsDirectory.path)
                 }) {
@@ -43,32 +71,6 @@ struct EntryListView: View {
                 .onHover { hovering in
                     isHoveringHistory = hovering
                 }
-
-                Spacer()
-
-                Button(action: {
-                    hoverManager.toggleRightPin()
-                }) {
-                    Image(systemName: hoverManager.isRightSidebarPinned ? "pin.fill" : "pin.slash")
-                        .foregroundColor(isHoveringPin ? theme.buttonTextHover : theme.buttonText)
-                        .font(.system(size: 12))
-                        .frame(width: 28, height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isHoveringPin ? theme.hoveredBackground : Color.clear)
-                        )
-                }
-                .buttonStyle(.plain)
-                .onHover { hovering in
-                    isHoveringPin = hovering
-                    if hovering {
-                        NSCursor.pointingHand.push()
-                    } else {
-                        NSCursor.pop()
-                    }
-                }
-                .accessibilityLabel(hoverManager.isRightSidebarPinned ? "Unpin sidebar" : "Pin sidebar")
-                .help(hoverManager.isRightSidebarPinned ? "Unpin sidebar" : "Pin sidebar")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)

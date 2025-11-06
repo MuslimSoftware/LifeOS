@@ -22,10 +22,12 @@ struct SidebarView: View {
         VStack(alignment: .leading, spacing: 2) {
             // Top section with pin button
             HStack {
+                Spacer()
+
                 Button(action: {
                     hoverManager.toggleLeftPin()
                 }) {
-                    Image(systemName: hoverManager.isLeftSidebarPinned ? "pin.fill" : "pin.slash")
+                    Image(systemName: hoverManager.isLeftSidebarPinned ? "chevron.left.2" : "line.horizontal.3")
                         .foregroundColor(isHoveringPin ? theme.buttonTextHover : theme.buttonText)
                         .font(.system(size: 12))
                         .frame(width: 28, height: 28)
@@ -44,15 +46,13 @@ struct SidebarView: View {
                         NSCursor.pop()
                     }
                 }
-                .accessibilityLabel(hoverManager.isLeftSidebarPinned ? "Unpin sidebar" : "Pin sidebar")
+                .accessibilityLabel("Toggle sidebar pin")
                 .accessibilityHint("Double tap to toggle sidebar pinning")
                 .accessibilityAddTraits(.isButton)
-                .help(hoverManager.isLeftSidebarPinned ? "Unpin sidebar" : "Pin sidebar")
-
-                Spacer()
+                .help("Toggle sidebar pin")
             }
             .padding(.top, 12)
-            .padding(.leading, 4)
+            .padding(.trailing, 4)
 
             Spacer()
                 .frame(height: 12)
@@ -139,8 +139,13 @@ struct SidebarView: View {
         .padding(.horizontal, 12)
         .frame(width: 160)
         .background(theme.surfaceColor)
-        .sheet(isPresented: $showSettings) {
+        .sheet(isPresented: $showSettings, onDismiss: {
+            hoverManager.isLeftModalOpen = false
+        }) {
             SettingsView()
+                .onAppear {
+                    hoverManager.isLeftModalOpen = true
+                }
         }
     }
     

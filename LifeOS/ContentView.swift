@@ -37,62 +37,67 @@ struct ContentView: View {
                         }
                     }
             } else if let editorVM = editorViewModel, let entryListVM = entryListViewModel {
-                HStack(spacing: 0) {
-                    // Sidebar with dynamic width based on hover state
-                    if hoverManager.isLeftSidebarOpen {
-                        SidebarView(selectedRoute: $selectedRoute)
-                            .frame(width: settings.sidebarWidth)
-                            .frame(maxHeight: .infinity, alignment: .top)
-                            .theme(settings.currentTheme)
-                            .environment(hoverManager)
+                ZStack {
+                    HStack(spacing: 0) {
+                        // Sidebar with dynamic width based on hover state
+                        if hoverManager.isLeftSidebarOpen {
+                            SidebarView(selectedRoute: $selectedRoute)
+                                .frame(width: settings.sidebarWidth)
+                                .frame(maxHeight: .infinity, alignment: .top)
+                                .theme(settings.currentTheme)
+                                .environment(hoverManager)
+                                .accessibilityElement(children: .contain)
+                                .accessibilityLabel("Navigation sidebar")
+
+                            Divider()
+                        }
+
+                        // Main content takes remaining space
+                        mainContent
                             .accessibilityElement(children: .contain)
-                            .accessibilityLabel("Navigation sidebar")
+                            .accessibilityLabel("Main content")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .environment(editorVM)
+                            .environment(entryListVM)
+                            .environment(hoverManager)
+                            .theme(settings.currentTheme)
+                            .background(settings.currentTheme.surfaceColor)
+                            .onReceive(timer) { _ in
+                                editorVM.timerTick()
+                            }
+                            .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { _ in
+                                editorVM.isFullscreen = true
+                            }
+                            .onReceive(NotificationCenter.default.publisher(for: NSWindow.willExitFullScreenNotification)) { _ in
+                                editorVM.isFullscreen = false
+                            }
+                            .onChange(of: editorVM.text) {
+                                guard !editorVM.isLoadingContent else { return }
 
-                        Divider()
-                    }
+                                saveTask?.cancel()
 
-                    // Main content takes remaining space
-                    mainContent
-                        .accessibilityElement(children: .contain)
-                        .accessibilityLabel("Main content")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .environment(editorVM)
-                        .environment(entryListVM)
-                        .environment(hoverManager)
-                        .theme(settings.currentTheme)
-                        .background(settings.currentTheme.surfaceColor)
-                        .onReceive(timer) { _ in
-                            editorVM.timerTick()
-                        }
-                        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { _ in
-                            editorVM.isFullscreen = true
-                        }
-                        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willExitFullScreenNotification)) { _ in
-                            editorVM.isFullscreen = false
-                        }
-                        .onChange(of: editorVM.text) {
-                            guard !editorVM.isLoadingContent else { return }
+                                saveTask = Task { @MainActor in
+                                    try? await Task.sleep(for: .milliseconds(500))
 
-                            saveTask?.cancel()
+                                    guard !Task.isCancelled else { return }
 
-                            saveTask = Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(500))
-
-                                guard !Task.isCancelled else { return }
-
-                                if let currentId = entryListVM.selectedEntryId {
-                                    let currentEntry = entryListVM.entries.first(where: { $0.id == currentId }) ?? entryListVM.draftEntry
-                                    if let currentEntry = currentEntry {
-                                        entryListVM.saveEntryWithoutPreviewUpdate(entry: currentEntry, content: editorVM.text)
+                                    if let currentId = entryListVM.selectedEntryId {
+                                        let currentEntry = entryListVM.entries.first(where: { $0.id == currentId }) ?? entryListVM.draftEntry
+                                        if let currentEntry = currentEntry {
+                                            entryListVM.saveEntryWithoutPreviewUpdate(entry: currentEntry, content: editorVM.text)
+                                        }
                                     }
                                 }
                             }
-                        }
-                        .onChange(of: entryListVM.selectedEntryId) { oldId, newId in
-                            saveTask?.cancel()
-                        }
+                            .onChange(of: entryListVM.selectedEntryId) { oldId, newId in
+                                saveTask?.cancel()
+                            }
+                    }
+                    .animation(.easeInOut(duration: 0.2), value: hoverManager.isLeftSidebarOpen)
                 }
-                .animation(.easeInOut(duration: 0.2), value: hoverManager.isLeftSidebarOpen)
+                .onChange(of: selectedRoute) { _, newRoute in
+                    hoverManager.currentRoute = newRoute
+                }
             } else {
                 ProgressView()
                     .onAppear {
