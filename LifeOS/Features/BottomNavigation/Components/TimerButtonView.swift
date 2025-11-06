@@ -7,32 +7,55 @@ struct TimerButtonView: View {
     
     @State private var isHoveringTimer = false
     @Binding var isHoveringBottomNav: Bool
+    @Binding var hoveredControl: String?
+    @Binding var scrollAccumulator: CGFloat
     
     var body: some View {
         @Bindable var vm = viewModel
         
-        Button(vm.timerButtonTitle()) {
+        ZStack {
+            // "Timer" label layer
+            Text("Timer")
+                .font(.system(size: 13))
+                .foregroundColor(timerColor)
+                .opacity(showTimerLabel ? 1.0 : 0.0)
+            
+            // Timer countdown layer with scroll indicator
+            Text(vm.timerButtonTitle())
+                .font(.system(size: 13))
+                .foregroundColor(timerColor)
+                .frame(minWidth: 50)
+                .overlay(alignment: .leading) {
+                    if isHoveringTimer && !vm.timerIsRunning {
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white)
+                            .offset(x: -12)
+                    }
+                }
+                .opacity(showTimerLabel ? 0.0 : 1.0)
+        }
+        .animation(.easeInOut(duration: 0.2), value: showTimerLabel)
+        .animation(.easeInOut(duration: 0.2), value: isHoveringTimer)
+        .padding(.horizontal, 8)
+        .contentShape(Rectangle())
+        .onTapGesture {
             vm.toggleTimer()
         }
-        .buttonStyle(.plain)
-        .foregroundColor(timerColor)
         .onHover { hovering in
             isHoveringTimer = hovering
             isHoveringBottomNav = hovering
+            hoveredControl = hovering ? "timer" : nil
             if hovering {
                 NSCursor.pointingHand.push()
             } else {
                 NSCursor.pop()
             }
         }
-        .onAppear {
-            NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-                if isHoveringTimer {
-                    vm.adjustTimerWithScroll(event.deltaY)
-                }
-                return event
-            }
-        }
+    }
+    
+    private var showTimerLabel: Bool {
+        return !viewModel.timerIsRunning && !isHoveringTimer
     }
     
     private var timerColor: Color {

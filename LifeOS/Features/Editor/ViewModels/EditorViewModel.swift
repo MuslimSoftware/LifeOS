@@ -12,8 +12,8 @@ class EditorViewModel {
     var timerIsRunning = false
     var lastClickTime: Date? = nil
 
-    var isFullscreen = false
     var bottomNavOpacity: Double = 1.0
+    var edgeHintsOpacity: Double = 1.0
     var isHoveringBottomNav = false
     
     private let fileService: FileManagerService
@@ -42,9 +42,24 @@ class EditorViewModel {
             timeRemaining = AppConstants.defaultTimerDuration
             timerIsRunning = false
             lastClickTime = nil
+            // Restore edge hints when timer is reset
+            withAnimation(.easeOut(duration: 1.0)) {
+                edgeHintsOpacity = 1.0
+            }
         } else {
             timerIsRunning.toggle()
             lastClickTime = now
+            
+            // Hide edge hints when timer starts, show when timer stops
+            if timerIsRunning {
+                withAnimation(.easeIn(duration: 1.0)) {
+                    edgeHintsOpacity = 0.0
+                }
+            } else {
+                withAnimation(.easeOut(duration: 1.0)) {
+                    edgeHintsOpacity = 1.0
+                }
+            }
         }
     }
     
@@ -56,6 +71,7 @@ class EditorViewModel {
             if !isHoveringBottomNav {
                 withAnimation(.easeOut(duration: 1.0)) {
                     bottomNavOpacity = 1.0
+                    edgeHintsOpacity = 1.0
                 }
             }
         }

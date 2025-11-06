@@ -7,8 +7,9 @@ struct EntryListView: View {
     @Environment(SidebarHoverManager.self) private var hoverManager
     @Environment(\.theme) private var theme
 
-    @State private var isHoveringHistory = false
+    @State private var isHoveringNewEntry = false
     @State private var isHoveringPin = false
+    @State private var showImportSheet = false
     
     let fileService: FileManagerService
     let pdfService: PDFExportService
@@ -45,31 +46,47 @@ struct EntryListView: View {
 
                 Spacer()
 
-                // History button (now on the right/outer edge)
-                Button(action: {
-                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: fileService.documentsDirectory.path)
-                }) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 4) {
-                                Text("History")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(isHoveringHistory ? theme.buttonTextHover : theme.buttonText)
-                                Image(systemName: "arrow.up.right")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(isHoveringHistory ? theme.buttonTextHover : theme.buttonText)
-                            }
-                            Text(fileService.documentsDirectory.path)
-                                .font(.system(size: 10))
-                                .foregroundColor(theme.secondaryText)
-                                .lineLimit(1)
-                        }
-                        Spacer()
+                // New Entry button and menu
+                HStack(spacing: 8) {
+                    // + New Entry button
+                    Button(action: createNewEntry) {
+                        Text("+ New Entry")
+                            .font(.system(size: 12))
+                            .foregroundColor(isHoveringNewEntry ? theme.buttonTextHover : theme.buttonText)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(isHoveringNewEntry ? theme.hoveredBackground : Color.clear)
+                            )
                     }
-                }
-                .buttonStyle(.plain)
-                .onHover { hovering in
-                    isHoveringHistory = hovering
+                    .buttonStyle(.plain)
+                    .onHover { hovering in
+                        isHoveringNewEntry = hovering
+                        if hovering {
+                            NSCursor.pointingHand.push()
+                        } else {
+                            NSCursor.pop()
+                        }
+                    }
+                    .help("New entry")
+                    
+                    // Three-dot menu
+                    Menu {
+                        Button("File Location") {
+                            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: fileService.documentsDirectory.path)
+                        }
+                        
+                        Button("Import Entries") {
+                            showImportSheet = true
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 16))
+                            .foregroundColor(theme.buttonText)
+                    }
+                    .menuIndicator(.hidden)
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 16)
@@ -181,5 +198,28 @@ struct EntryListView: View {
         }
         .frame(width: 200)
         .background(theme.backgroundColor)
+        .sheet(isPresented: $showImportSheet) {
+            ImportView(viewModel: ImportViewModel(fileService: fileService, entryListViewModel: viewModel))
+        }
+    }
+    
+    private func createNewEntry() {
+        if editorViewModel.text.isEmpty {
+            print("Current entry is already empty, not creating a new one")
+            return
+        }
+        
+        if let currentId = viewModel.selectedEntryId {
+            let currentEntry = viewModel.entries.first(where: { $0.id == currentId }) ?? viewModel.draftEntry
+            if let currentEntry = currentEntry {
+                viewModel.saveEntry(entry: currentEntry, content: editorViewModel.text)
+            }
+        }
+        
+        let newText = viewModel.createDraftEntry()
+        editorViewModel.isLoadingContent = true
+        editorViewModel.text = newText
+        editorViewModel.isLoadingContent = false
+        editorViewModel.randomizePlaceholder()
     }
 }

@@ -65,12 +65,6 @@ struct ContentView: View {
                             .onReceive(timer) { _ in
                                 editorVM.timerTick()
                             }
-                            .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { _ in
-                                editorVM.isFullscreen = true
-                            }
-                            .onReceive(NotificationCenter.default.publisher(for: NSWindow.willExitFullScreenNotification)) { _ in
-                                editorVM.isFullscreen = false
-                            }
                             .onChange(of: editorVM.text) {
                                 guard !editorVM.isLoadingContent else { return }
 

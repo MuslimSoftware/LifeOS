@@ -21,7 +21,6 @@ struct CalendarView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                ZStack {
                 VStack(spacing: 0) {
                     VStack(spacing: 0) {
                         Text(monthString)
@@ -161,6 +160,8 @@ struct CalendarView: View {
                     Spacer()
                         .frame(height: 60)
                 }
+                .frame(width: geometry.size.width * 0.90)
+                .frame(maxWidth: .infinity)
 
                 VStack {
                     Spacer()
@@ -210,15 +211,14 @@ struct CalendarView: View {
                     .frame(height: 60)
                     .background(theme.backgroundColor)
                 }
-                }
-                .overlay(
-                    EdgeHintView(
-                        isLeftEdge: true,
-                        isVisible: !hoverManager.isLeftSidebarOpen
-                            && !hoverManager.isLeftSidebarPinned
-                    )
-                )
             }
+            .overlay(
+                EdgeHintView(
+                    isLeftEdge: true,
+                    isVisible: !hoverManager.isLeftSidebarOpen
+                        && !hoverManager.isLeftSidebarPinned
+                )
+            )
             .onAppear {
                 if todoViewModel == nil {
                     todoViewModel = TODOViewModel(fileService: entryListViewModel.fileService)
@@ -231,6 +231,7 @@ struct CalendarView: View {
                         scrollAccumulator += event.deltaY
 
                         if scrollAccumulator > 3 {
+                            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
                             if hoveredControl == "month" {
                                 adjustMonth(by: 1)
                             } else if hoveredControl == "year" {
@@ -238,6 +239,7 @@ struct CalendarView: View {
                             }
                             scrollAccumulator = 0
                         } else if scrollAccumulator < -3 {
+                            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
                             if hoveredControl == "month" {
                                 adjustMonth(by: -1)
                             } else if hoveredControl == "year" {

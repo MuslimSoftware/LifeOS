@@ -10,76 +10,45 @@ struct BottomNavigationView: View {
     let fileService: FileManagerService
     @Binding var selectedDate: Date
     
-    @State private var hoveredDateControl: String? = nil
-    @State private var scrollAccumulator: CGFloat = 0
-    
-    private let calendar = Calendar.current
+    @State private var hoveredTimerControl: String? = nil
+    @State private var timerScrollAccumulator: CGFloat = 0
     
     var body: some View {
         @Bindable var vm = editorViewModel
         
         HStack {
+            Spacer()
+            
+            DateSelectorView(
+                isHoveringBottomNav: $vm.isHoveringBottomNav,
+                selectedDate: $selectedDate
+            )
+            
+            Text("•")
+                .foregroundColor(theme.separatorColor)
+                .padding(.horizontal, 8)
+            
             FontSelectorView(
                 isHoveringBottomNav: $vm.isHoveringBottomNav,
                 availableFonts: availableFonts
             )
-            
-            Spacer()
-            
-            HStack(spacing: 8) {
-                ScrollableValueControl.month(
-                    date: selectedDate,
-                    hoveredControl: $hoveredDateControl,
-                    scrollAccumulator: $scrollAccumulator,
-                    onAdjust: adjustMonth
-                )
-                .onHover { hovering in
-                    vm.isHoveringBottomNav = hovering
-                }
 
-                Text("•")
-                    .foregroundColor(theme.separatorColor)
+            Text("•")
+                .foregroundColor(theme.separatorColor)
+                .padding(.horizontal, 8)
 
-                ScrollableValueControl.day(
-                    date: selectedDate,
-                    hoveredControl: $hoveredDateControl,
-                    scrollAccumulator: $scrollAccumulator,
-                    onAdjust: adjustDay
-                )
-                .onHover { hovering in
-                    vm.isHoveringBottomNav = hovering
-                }
-
-                Text("•")
-                    .foregroundColor(theme.separatorColor)
-
-                ScrollableValueControl.year(
-                    date: selectedDate,
-                    hoveredControl: $hoveredDateControl,
-                    scrollAccumulator: $scrollAccumulator,
-                    onAdjust: adjustYear
-                )
-                .onHover { hovering in
-                    vm.isHoveringBottomNav = hovering
-                }
-
-                Text("•")
-                    .foregroundColor(theme.separatorColor)
-
-                TimerButtonView(isHoveringBottomNav: $vm.isHoveringBottomNav)
-
-                Text("•")
-                    .foregroundColor(theme.separatorColor)
-
-                UtilityButtonsView(isHoveringBottomNav: $vm.isHoveringBottomNav, fileService: fileService)
-            }
-            .padding(8)
-            .cornerRadius(6)
-            .onHover { hovering in
-                vm.isHoveringBottomNav = hovering
-            }
+            TimerButtonView(
+                isHoveringBottomNav: $vm.isHoveringBottomNav,
+                hoveredControl: $hoveredTimerControl,
+                scrollAccumulator: $timerScrollAccumulator
+            )
+        }
+        .padding(8)
+        .onHover { hovering in
+            vm.isHoveringBottomNav = hovering
         }
         .padding()
+        .frame(height: 60)
         .background(theme.backgroundColor)
         .opacity(vm.bottomNavOpacity)
         .onHover { hovering in
@@ -96,15 +65,17 @@ struct BottomNavigationView: View {
         }
         .onAppear {
             NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-                if hoveredDateControl != nil {
-                    scrollAccumulator += event.deltaY
+                if hoveredTimerControl != nil {
+                    timerScrollAccumulator += event.deltaY
 
-                    if scrollAccumulator > 3 {
-                        handleScroll(direction: 1)
-                        scrollAccumulator = 0
-                    } else if scrollAccumulator < -3 {
-                        handleScroll(direction: -1)
-                        scrollAccumulator = 0
+                    if timerScrollAccumulator > 3 {
+                        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+                        adjustTimer(by: 1)
+                        timerScrollAccumulator = 0
+                    } else if timerScrollAccumulator < -3 {
+                        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+                        adjustTimer(by: -1)
+                        timerScrollAccumulator = 0
                     }
                     return nil
                 }
@@ -113,34 +84,10 @@ struct BottomNavigationView: View {
         }
     }
 
-    private func handleScroll(direction: Int) {
-        switch hoveredDateControl {
-        case "month":
-            adjustMonth(by: direction)
-        case "day":
-            adjustDay(by: direction)
-        case "year":
-            adjustYear(by: direction)
-        default:
-            break
-        }
-    }
-    
-    private func adjustMonth(by value: Int) {
-        if let newDate = calendar.date(byAdding: .month, value: value, to: selectedDate) {
-            selectedDate = newDate
-        }
-    }
-    
-    private func adjustDay(by value: Int) {
-        if let newDate = calendar.date(byAdding: .day, value: value, to: selectedDate) {
-            selectedDate = newDate
-        }
-    }
-    
-    private func adjustYear(by value: Int) {
-        if let newDate = calendar.date(byAdding: .year, value: value, to: selectedDate) {
-            selectedDate = newDate
-        }
+    private func adjustTimer(by direction: Int) {
+        let minutes = direction * 5
+        let seconds = minutes * 60
+        let newTime = editorViewModel.timeRemaining + seconds
+        editorViewModel.timeRemaining = min(max(newTime, 0), 2700)
     }
 }

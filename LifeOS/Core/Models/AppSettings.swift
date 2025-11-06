@@ -45,4 +45,11 @@ class AppSettings {
             fontSize = sizes[nextIndex]
         }
     }
+    
+    func adjustFontSize(by direction: Int, from sizes: [CGFloat]) {
+        if let currentIndex = sizes.firstIndex(of: fontSize) {
+            let newIndex = max(0, min(sizes.count - 1, currentIndex + direction))
+            fontSize = sizes[newIndex]
+        }
+    }
 }

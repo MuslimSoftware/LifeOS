@@ -36,6 +36,14 @@ struct ScrollableValueControl<Value>: View {
             .font(.system(size: 13))
             .foregroundColor(hoveredControl == identifier ? theme.buttonTextHover : theme.buttonText)
             .frame(minWidth: minWidth)
+            .overlay(alignment: .leading) {
+                if hoveredControl == identifier {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white)
+                        .offset(x: -12)
+                }
+            }
             .padding(.horizontal, 8)
             .contentShape(Rectangle())
             .onHover { hovering in
@@ -54,10 +62,12 @@ struct ScrollableValueControl<Value>: View {
         scrollAccumulator += event.deltaY
 
         if scrollAccumulator > 3 {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
             onScroll(1)
             scrollAccumulator = 0
             return true
         } else if scrollAccumulator < -3 {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
             onScroll(-1)
             scrollAccumulator = 0
             return true

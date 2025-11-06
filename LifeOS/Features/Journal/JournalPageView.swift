@@ -36,6 +36,7 @@ struct JournalPageView: View {
                     isVisible: !hoverManager.isLeftSidebarOpen
                         && !hoverManager.isLeftSidebarPinned
                 )
+                .opacity(editorViewModel.edgeHintsOpacity)
             )
             .overlay(
                 EdgeHintView(
@@ -43,6 +44,7 @@ struct JournalPageView: View {
                     isVisible: !hoverManager.isRightSidebarOpen(for: .journal)
                         && !hoverManager.isRightSidebarPinned(for: .journal)
                 )
+                .opacity(editorViewModel.edgeHintsOpacity)
             )
 
             if hoverManager.isRightSidebarOpen(for: .journal) {
