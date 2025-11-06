@@ -14,7 +14,6 @@ struct AIChatView: View {
     @Environment(SidebarHoverManager.self) private var hoverManager
     @StateObject private var viewModel: AIChatViewModel
     @State private var messageText: String = ""
-    @State private var isHoveringHistoryButton = false
     @State private var scrollToMessageId: UUID?
 
     init(agentKernel: AgentKernel) {
@@ -48,55 +47,48 @@ struct AIChatView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                // Top bar with history button
-                HStack {
+            ZStack {
+                theme.surfaceColor
+                    .ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    // Messages
+                    messagesView
+
+                    // Error banner
+                    if let error = viewModel.error {
+                        errorBanner(error)
+                    }
+
                     Spacer()
 
-                    Button(action: {
-                        hoverManager.openRightSidebarWithPin(for: .aiChat)
-                    }) {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 13))
-                            .foregroundColor(isHoveringHistoryButton ? theme.buttonTextHover : theme.buttonText)
-                            .padding(8)
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        isHoveringHistoryButton = hovering
-                        if hovering {
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
-                        }
-                    }
+                    // Input
+                    ChatInputView(
+                        messageText: $messageText,
+                        onSend: { text in
+                            Task {
+                                await viewModel.sendMessage(text)
+                            }
+                        },
+                        isLoading: viewModel.isLoading
+                    )
+                    .padding(.bottom, 50)
                 }
-                .padding(.top, 16)
-                .padding(.trailing, 16)
-
-                // Messages
-                messagesView
-
-                // Error banner
-                if let error = viewModel.error {
-                    errorBanner(error)
-                }
-
-                Spacer()
-
-                // Input
-                ChatInputView(
-                    messageText: $messageText,
-                    onSend: { text in
-                        Task {
-                            await viewModel.sendMessage(text)
-                        }
-                    },
-                    isLoading: viewModel.isLoading
-                )
-                .padding(.bottom, 50)
             }
-            .background(theme.surfaceColor)
+            .overlay(
+                EdgeHintView(
+                    isLeftEdge: true,
+                    isVisible: !hoverManager.isLeftSidebarOpen
+                        && !hoverManager.isLeftSidebarPinned
+                )
+            )
+            .overlay(
+                EdgeHintView(
+                    isLeftEdge: false,
+                    isVisible: !hoverManager.isRightSidebarOpen(for: .aiChat)
+                        && !hoverManager.isRightSidebarPinned(for: .aiChat)
+                )
+            )
 
             if hoverManager.isRightSidebarOpen(for: .aiChat) {
                 Divider()

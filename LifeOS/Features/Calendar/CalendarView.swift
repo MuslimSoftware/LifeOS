@@ -4,6 +4,7 @@ struct CalendarView: View {
     @Environment(\.theme) private var theme
     @Environment(EntryListViewModel.self) private var entryListViewModel
     @Environment(EditorViewModel.self) private var editorViewModel
+    @Environment(SidebarHoverManager.self) private var hoverManager
 
     @Binding var selectedRoute: NavigationRoute
 
@@ -20,6 +21,7 @@ struct CalendarView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
+                ZStack {
                 VStack(spacing: 0) {
                     VStack(spacing: 0) {
                         Text(monthString)
@@ -208,6 +210,14 @@ struct CalendarView: View {
                     .frame(height: 60)
                     .background(theme.backgroundColor)
                 }
+                }
+                .overlay(
+                    EdgeHintView(
+                        isLeftEdge: true,
+                        isVisible: !hoverManager.isLeftSidebarOpen
+                            && !hoverManager.isLeftSidebarPinned
+                    )
+                )
             }
             .onAppear {
                 if todoViewModel == nil {
