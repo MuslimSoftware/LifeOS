@@ -19,18 +19,18 @@ struct BottomNavigationView: View {
         HStack {
             Spacer()
             
-            DateSelectorView(
+            FontSelectorView(
                 isHoveringBottomNav: $vm.isHoveringBottomNav,
-                selectedDate: $selectedDate
+                availableFonts: availableFonts
             )
             
             Text("•")
                 .foregroundColor(theme.separatorColor)
                 .padding(.horizontal, 8)
             
-            FontSelectorView(
+            DateSelectorView(
                 isHoveringBottomNav: $vm.isHoveringBottomNav,
-                availableFonts: availableFonts
+                selectedDate: $selectedDate
             )
 
             Text("•")

@@ -18,6 +18,7 @@ struct EntryListView: View {
         @Bindable var vm = viewModel
         
         VStack(spacing: 0) {
+            // Top row: Pin button and three-dot menu
             HStack {
                 // Pin button (now on the left/inner edge)
                 Button(action: {
@@ -46,51 +47,53 @@ struct EntryListView: View {
 
                 Spacer()
 
-                // New Entry button and menu
-                HStack(spacing: 8) {
-                    // + New Entry button
-                    Button(action: createNewEntry) {
-                        Text("+ New Entry")
-                            .font(.system(size: 12))
-                            .foregroundColor(isHoveringNewEntry ? theme.buttonTextHover : theme.buttonText)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(isHoveringNewEntry ? theme.hoveredBackground : Color.clear)
-                            )
+                // Three-dot menu
+                Menu {
+                    Button("File Location") {
+                        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: fileService.documentsDirectory.path)
                     }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        isHoveringNewEntry = hovering
-                        if hovering {
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
-                        }
-                    }
-                    .help("New entry")
                     
-                    // Three-dot menu
-                    Menu {
-                        Button("File Location") {
-                            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: fileService.documentsDirectory.path)
-                        }
-                        
-                        Button("Import Entries") {
-                            showImportSheet = true
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.system(size: 16))
-                            .foregroundColor(theme.buttonText)
+                    Button("Import Entries") {
+                        showImportSheet = true
                     }
-                    .menuIndicator(.hidden)
-                    .buttonStyle(.plain)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16))
+                        .foregroundColor(theme.buttonText)
+                        .rotationEffect(.degrees(90))
+                        .frame(width: 16, height: 16)
                 }
+                .menuIndicator(.hidden)
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            
+            Divider()
+            
+            // New Entry button (centered)
+            Button(action: createNewEntry) {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13))
+                        .foregroundColor(isHoveringNewEntry ? theme.buttonTextHover : theme.buttonText)
+                    Text("New Entry")
+                        .font(.system(size: 13))
+                        .foregroundColor(isHoveringNewEntry ? theme.buttonTextHover : theme.buttonText)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                isHoveringNewEntry = hovering
+                if hovering {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .help("New entry")
             
             Divider()
             

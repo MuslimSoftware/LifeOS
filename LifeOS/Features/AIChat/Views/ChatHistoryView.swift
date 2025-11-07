@@ -27,7 +27,7 @@ struct ChatHistoryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top bar with Pin button and New Chat button
+            // Top bar with Pin button
             HStack {
                 // Pin button (on left/inner edge)
                 Button(action: {
@@ -55,33 +55,37 @@ struct ChatHistoryView: View {
                 .help(hoverManager.isRightSidebarPinned(for: .aiChat) ? "Unpin sidebar" : "Pin sidebar")
 
                 Spacer()
-
-                // New Chat button (on right/outer edge)
-                Button(action: onNewConversation) {
-                    HStack {
-                        Image(systemName: "plus.bubble")
-                            .font(.system(size: 13))
-                            .foregroundColor(isHoveringNewChat ? theme.buttonTextHover : theme.buttonText)
-                        Text("New Chat")
-                            .font(.system(size: 13))
-                            .foregroundColor(isHoveringNewChat ? theme.buttonTextHover : theme.buttonText)
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("New Chat")
-                .accessibilityHint("Double tap to start a new conversation")
-                .accessibilityAddTraits(.isButton)
-                .onHover { hovering in
-                    isHoveringNewChat = hovering
-                    if hovering {
-                        NSCursor.pointingHand.push()
-                    } else {
-                        NSCursor.pop()
-                    }
-                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+
+            Divider()
+
+            // New Chat button (centered)
+            Button(action: onNewConversation) {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13))
+                        .foregroundColor(isHoveringNewChat ? theme.buttonTextHover : theme.buttonText)
+                    Text("New Chat")
+                        .font(.system(size: 13))
+                        .foregroundColor(isHoveringNewChat ? theme.buttonTextHover : theme.buttonText)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("New Chat")
+            .accessibilityHint("Double tap to start a new conversation")
+            .accessibilityAddTraits(.isButton)
+            .onHover { hovering in
+                isHoveringNewChat = hovering
+                if hovering {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
 
             Divider()
 
