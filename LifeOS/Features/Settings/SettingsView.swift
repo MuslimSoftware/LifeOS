@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum SettingsSection: String, CaseIterable {
+    case appearance = "Appearance"
     case openai = "OpenAI API"
     case backup = "Data Backup"
     case embeddings = "Embeddings"
@@ -9,6 +10,7 @@ enum SettingsSection: String, CaseIterable {
 struct SettingsView: View {
     @Environment(\.theme) private var theme
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppSettings.self) private var settings
 
     @State private var apiKey: String = ""
     @State private var isKeyStored: Bool = false
@@ -17,7 +19,7 @@ struct SettingsView: View {
     @State private var exportMessage: String?
     @State private var importKeyText: String = ""
     @State private var showImportField: Bool = false
-    @State private var selectedSection: SettingsSection = .openai
+    @State private var selectedSection: SettingsSection = .appearance
     @State private var hoveredSection: SettingsSection?
     // @State private var showProcessingSheet: Bool = false  // REMOVED: analytics
     @State private var isProcessing: Bool = false
@@ -127,6 +129,8 @@ struct SettingsView: View {
                     .padding(.horizontal, 24)
 
                 switch selectedSection {
+                case .appearance:
+                    appearanceSection
                 case .openai:
                     openAISection
                 case .backup:
@@ -136,6 +140,116 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Appearance")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(theme.primaryText)
+
+                Text("Choose the appearance for LifeOS.")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Theme")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.primaryText)
+
+                HStack(spacing: 16) {
+                    // Light theme button
+                    VStack(spacing: 8) {
+                        Text("Light")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(theme.primaryText)
+                        
+                        Button(action: {
+                            settings.setTheme(.light)
+                        }) {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.white)
+                                .frame(width: 120, height: 80)
+                                .overlay {
+                                    if settings.colorScheme == .light {
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .strokeBorder(theme.accentColor, lineWidth: 3)
+                                    }
+                                }
+                                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                        }
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                    }
+                    
+                    // Dark theme button
+                    VStack(spacing: 8) {
+                        Text("Dark")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(theme.primaryText)
+                        
+                        Button(action: {
+                            settings.setTheme(.dark)
+                        }) {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(red: 0.12, green: 0.12, blue: 0.12))
+                                .frame(width: 120, height: 80)
+                                .overlay {
+                                    if settings.colorScheme == .dark {
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .strokeBorder(theme.accentColor, lineWidth: 3)
+                                    }
+                                }
+                                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                        }
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                    }
+                    
+                    // System theme button
+                    VStack(spacing: 8) {
+                        Text("System")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(theme.primaryText)
+                        
+                        Button(action: {
+                            settings.setTheme(nil)
+                        }) {
+                            HStack(spacing: 0) {
+                                // Left half - Light
+                                Rectangle()
+                                    .fill(Color.white)
+                                    .frame(width: 60, height: 80)
+                                
+                                // Right half - Dark
+                                Rectangle()
+                                    .fill(Color(red: 0.12, green: 0.12, blue: 0.12))
+                                    .frame(width: 60, height: 80)
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay {
+                                if settings.colorScheme == nil {
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .strokeBorder(theme.accentColor, lineWidth: 3)
+                                }
+                            }
+                            .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                        }
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                    }
+                }
+            }
+            .padding(12)
+            .background(theme.hoveredBackground)
+            .cornerRadius(8)
+
+            Spacer()
+        }
+        .padding(24)
     }
 
     private var openAISection: some View {

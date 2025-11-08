@@ -13,7 +13,6 @@ struct SidebarView: View {
     @Binding var selectedRoute: NavigationRoute
 
     @State private var hoveredRoute: NavigationRoute? = nil
-    @State private var isHoveringThemeToggle = false
     @State private var isHoveringSettings = false
     @State private var isHoveringPin = false
     @State private var showSettings = false
@@ -87,7 +86,7 @@ struct SidebarView: View {
             
             Spacer()
             
-            HStack(spacing: 12) {
+            HStack {
                 Button(action: {
                     showSettings = true
                 }) {
@@ -108,30 +107,6 @@ struct SidebarView: View {
                         NSCursor.pop()
                     }
                 }
-                
-                Spacer()
-                
-                Button(action: {
-                    settings.toggleTheme()
-                }) {
-                    Image(systemName: settings.colorScheme == .light ? "moon.fill" : "sun.max.fill")
-                        .foregroundColor(isHoveringThemeToggle ? theme.buttonTextHover : theme.buttonText)
-                        .font(.system(size: 14))
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .accessibilityLabel("Toggle theme")
-                .accessibilityHint(settings.colorScheme == .light ? "Double tap to switch to dark mode" : "Double tap to switch to light mode")
-                .accessibilityAddTraits(.isButton)
-                .onHover { hovering in
-                    isHoveringThemeToggle = hovering
-                    if hovering {
-                        NSCursor.pointingHand.push()
-                    } else {
-                        NSCursor.pop()
-                    }
-                }
-                .padding(.trailing, 4)
             }
             .padding(.bottom, 16)
             .padding(.leading, 4)

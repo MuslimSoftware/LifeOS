@@ -59,8 +59,6 @@ struct ChatHistoryView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
 
-            Divider()
-
             // New Chat button (centered)
             Button(action: onNewConversation) {
                 HStack(spacing: 6) {
@@ -73,8 +71,13 @@ struct ChatHistoryView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(theme.hoveredBackground)
+                )
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 12)
             .accessibilityLabel("New Chat")
             .accessibilityHint("Double tap to start a new conversation")
             .accessibilityAddTraits(.isButton)
@@ -87,7 +90,8 @@ struct ChatHistoryView: View {
                 }
             }
 
-            Divider()
+            Spacer()
+                .frame(height: 12)
 
             // Conversation list
             ScrollView {

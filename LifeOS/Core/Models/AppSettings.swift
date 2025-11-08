@@ -1,15 +1,20 @@
 
 import SwiftUI
+import AppKit
 
 @Observable
 class AppSettings {
-    var colorScheme: ColorScheme = .light
+    var colorScheme: ColorScheme? = nil  // nil = system
     var selectedFont: String = "Lato-Regular"
     var fontSize: CGFloat = 18
     var currentRandomFont: String = ""
 
     var currentTheme: Theme {
-        colorScheme == .light ? .light : .dark
+        if let scheme = colorScheme {
+            return scheme == .light ? .light : .dark
+        }
+        // System theme - use actual system appearance
+        return NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
     }
 
     // Note: sidebarWidth kept for backward compatibility but will be controlled by SidebarHoverManager
@@ -18,13 +23,32 @@ class AppSettings {
     }
 
     init() {
-        let savedScheme = UserDefaults.standard.string(forKey: "colorScheme") ?? "light"
-        colorScheme = savedScheme == "dark" ? .dark : .light
+        let savedScheme = UserDefaults.standard.string(forKey: "colorScheme")
+        if savedScheme == "system" || savedScheme == nil {
+            colorScheme = nil  // System
+        } else {
+            colorScheme = savedScheme == "dark" ? .dark : .light
+        }
+    }
+    
+    func setTheme(_ scheme: ColorScheme?) {
+        colorScheme = scheme
+        if let scheme = scheme {
+            UserDefaults.standard.set(scheme == .light ? "light" : "dark", forKey: "colorScheme")
+        } else {
+            UserDefaults.standard.set("system", forKey: "colorScheme")
+        }
     }
     
     func toggleTheme() {
-        colorScheme = colorScheme == .light ? .dark : .light
-        UserDefaults.standard.set(colorScheme == .light ? "light" : "dark", forKey: "colorScheme")
+        if colorScheme == nil {
+            colorScheme = .light
+        } else if colorScheme == .light {
+            colorScheme = .dark
+        } else {
+            colorScheme = nil
+        }
+        setTheme(colorScheme)
     }
     
     func cycleFont(to font: String) {

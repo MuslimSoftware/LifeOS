@@ -49,7 +49,7 @@ struct EntryListView: View {
 
                 // Three-dot menu
                 Menu {
-                    Button("File Location") {
+                    Button("Show in Finder") {
                         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: fileService.documentsDirectory.path)
                     }
                     
@@ -61,15 +61,14 @@ struct EntryListView: View {
                         .font(.system(size: 16))
                         .foregroundColor(theme.buttonText)
                         .rotationEffect(.degrees(90))
-                        .frame(width: 16, height: 16)
+                        .padding(8)
+                        .contentShape(Rectangle())
                 }
                 .menuIndicator(.hidden)
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            
-            Divider()
             
             // New Entry button (centered)
             Button(action: createNewEntry) {
@@ -83,8 +82,13 @@ struct EntryListView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(theme.hoveredBackground)
+                )
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 12)
             .onHover { hovering in
                 isHoveringNewEntry = hovering
                 if hovering {
@@ -95,7 +99,8 @@ struct EntryListView: View {
             }
             .help("New entry")
             
-            Divider()
+            Spacer()
+                .frame(height: 12)
             
             ScrollView {
                 LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
