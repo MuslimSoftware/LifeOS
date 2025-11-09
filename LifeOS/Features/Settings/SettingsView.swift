@@ -728,7 +728,10 @@ struct SettingsView: View {
                 .background(theme.hoveredBackground)
                 .cornerRadius(6)
             }
+
+            Spacer()
         }
+        .padding(24)
         .onAppear {
             loadEmbeddingsStats()
         }

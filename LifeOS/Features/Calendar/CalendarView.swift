@@ -14,6 +14,7 @@ struct CalendarView: View {
     @State private var selectedDay: Date? = Date()
     @State private var todoViewModel: TODOViewModel?
     @State private var todoCounts: [String: (incomplete: Int, completed: Int)] = [:]
+    @State private var stickyNoteText: String = ""
 
     private let calendar = Calendar.current
     private let daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -66,102 +67,56 @@ struct CalendarView: View {
                             }
                         }
                         .padding(.horizontal, 40)
+                        .frame(height: 520)
                     }
 
                     VStack(spacing: 0) {
                         if let selectedDay = selectedDay, let todoVM = todoViewModel {
-                            HStack(spacing: 0) {
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text("Journal")
-                                        .font(.system(size: 20, weight: .semibold))
-                                        .foregroundColor(theme.primaryText)
-                                        .padding(.horizontal, 40)
-                                        .padding(.top, 24)
-                                        .padding(.bottom, 16)
+                            HStack(alignment: .top, spacing: 0) {
+                                Spacer()
 
-                                    if !entriesForSelectedDay(selectedDay).isEmpty {
-                                        ScrollView {
-                                            VStack(alignment: .leading, spacing: 12) {
-                                                ForEach(entriesForSelectedDay(selectedDay)) { entry in
-                                                    VStack(alignment: .leading, spacing: 6) {
-                                                        if !entry.previewText.isEmpty {
-                                                            Text(entry.previewText)
-                                                                .font(.system(size: 14))
-                                                                .foregroundColor(theme.primaryText)
-                                                                .lineLimit(1)
-                                                        } else {
-                                                            Text("Empty entry")
-                                                                .font(.system(size: 14))
-                                                                .foregroundColor(theme.tertiaryText)
-                                                                .italic()
-                                                        }
-                                                    }
-                                                    .padding(16)
-                                                    .background(theme.dividerColor.opacity(0.15))
-                                                    .cornerRadius(8)
-                                                    .onTapGesture {
-                                                        openEntry(entry)
-                                                    }
-                                                    .onHover { hovering in
-                                                        if hovering {
-                                                            NSCursor.pointingHand.push()
-                                                        } else {
-                                                            NSCursor.pop()
-                                                        }
-                                                    }
-                                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                                }
-                                            }
-                                            .padding(.horizontal, 40)
-                                            .padding(.bottom, 20)
-                                        }
-                                        .frame(height: 180)
-                                    } else {
-                                        ScrollView {
-                                            VStack(alignment: .leading, spacing: 12) {
-                                                Button(action: {
-                                                    createJournalForSelectedDay()
-                                                }) {
-                                                    Image(systemName: "plus.circle")
-                                                        .font(.system(size: 16))
-                                                        .foregroundColor(theme.secondaryText)
-                                                        .padding(12)
-                                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                                        .background(theme.dividerColor.opacity(0.1))
-                                                        .cornerRadius(8)
-                                                }
-                                                .buttonStyle(.plain)
-                                                .onHover { hovering in
-                                                    if hovering {
-                                                        NSCursor.pointingHand.push()
-                                                    } else {
-                                                        NSCursor.pop()
-                                                    }
-                                                }
-                                            }
-                                            .padding(.horizontal, 40)
-                                            .padding(.bottom, 20)
-                                        }
-                                        .frame(height: 180)
-                                    }
+                                VStack(alignment: .leading, spacing: 0) {
+                                    TextEditor(text: $stickyNoteText)
+                                        .font(.system(size: 14))
+                                        .scrollContentBackground(.hidden)
+                                        .background(Color.clear)
+                                        .padding(16)
+                                        .frame(maxHeight: .infinity)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(theme.backgroundColor)
+                                        )
+                                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 0)
+                                        .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
+                                        .padding(.horizontal, 32)
+                                        .padding(.vertical, 12)
                                 }
                                 .frame(maxWidth: .infinity)
+
+                                Rectangle()
+                                    .fill(theme.dividerColor.opacity(0.3))
+                                    .frame(width: 1)
 
                                 TODOListView()
                                     .environment(todoVM)
                                     .frame(maxWidth: .infinity)
+
+                                Spacer()
                             }
+                            .frame(width: geometry.size.width * 0.80)
+                            .frame(maxWidth: .infinity)
                         } else {
                             Color.clear
                         }
                     }
-                    .frame(height: 220)
+                    .frame(height: 240)
+                    .background(theme.surfaceColor.opacity(0.3))
 
                     Spacer()
                         .frame(height: 60)
                 }
                 .frame(width: geometry.size.width * 0.90)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
                 VStack {
                     Spacer()
@@ -225,6 +180,7 @@ struct CalendarView: View {
                     updateTODOsForSelectedDay()
                 }
                 refreshTODOCounts()
+                loadStickyNoteForSelectedDay()
 
                 NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
                     if hoveredControl == "month" || hoveredControl == "year" {
@@ -253,6 +209,10 @@ struct CalendarView: View {
             }
             .onChange(of: selectedDay) {
                 updateTODOsForSelectedDay()
+                loadStickyNoteForSelectedDay()
+            }
+            .onChange(of: stickyNoteText) { oldValue, newValue in
+                saveStickyNoteForSelectedDay()
             }
             .onChange(of: todoViewModel?.todos.count) { oldValue, newValue in
                 if let selectedDay = selectedDay {
@@ -433,6 +393,51 @@ struct CalendarView: View {
         updateTODOCountsForDate(selectedDay)
     }
 
+    private func loadStickyNoteForSelectedDay() {
+        guard let selectedDay = selectedDay else {
+            stickyNoteText = ""
+            return
+        }
+
+        stickyNoteText = entryListViewModel.fileService.loadStickyNoteForDate(date: selectedDay)
+    }
+
+    private func saveStickyNoteForSelectedDay() {
+        guard let selectedDay = selectedDay else { return }
+
+        let entries = entriesForSelectedDay(selectedDay)
+        var entry = entries.first
+
+        // If no entry exists for this day, create one
+        if entry == nil {
+            if let existingFilename = entryListViewModel.fileService.findExistingFileForDate(date: selectedDay) {
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "MMM d"
+                let displayDate = dateFormatter.string(from: selectedDay)
+                let year = calendar.component(.year, from: selectedDay)
+
+                if let uuidMatch = existingFilename.range(of: "\\[(.*?)\\]", options: .regularExpression),
+                   let uuid = UUID(uuidString: String(existingFilename[uuidMatch].dropFirst().dropLast())) {
+                    entry = HumanEntry(
+                        id: uuid,
+                        date: displayDate,
+                        filename: existingFilename,
+                        previewText: "",
+                        year: year
+                    )
+                }
+            } else {
+                let newEntry = HumanEntry.createWithDate(date: selectedDay)
+                entryListViewModel.fileService.saveEntry(newEntry, content: "")
+                entry = newEntry
+            }
+        }
+
+        if let entry = entry {
+            entryListViewModel.fileService.saveStickyNote(stickyNoteText, for: entry)
+        }
+    }
+
     private func updateTODOCountsForDate(_ date: Date) {
         guard let todos = todoViewModel?.todos else { return }
 
@@ -475,6 +480,12 @@ struct CalendarView: View {
     private func todosForDay(_ date: Date) -> (incomplete: Int, completed: Int) {
         let key = dateKey(for: date)
         return todoCounts[key] ?? (0, 0)
+    }
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM d"
+        return formatter.string(from: date)
     }
 }
 
@@ -548,6 +559,52 @@ struct DayCell: View {
             return theme.primaryText
         }
         return theme.secondaryText
+    }
+}
+
+struct JournalEntryCard: View {
+    let entry: HumanEntry
+    let theme: Theme
+    let onTap: () -> Void
+    
+    @State private var isHovering = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !entry.previewText.isEmpty {
+                Text(entry.previewText)
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.primaryText)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            } else {
+                Text("Empty entry")
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.tertiaryText)
+                    .italic()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.01))
+                .shadow(color: theme.dividerColor.opacity(isHovering ? 0.4 : 0.2), radius: isHovering ? 8 : 4, x: 0, y: 2)
+        )
+        .scaleEffect(isHovering ? 1.02 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: isHovering)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
+        }
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
     }
 }
 

@@ -16,13 +16,6 @@ struct EntryRowView: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(alignment: .top, spacing: 0) {
-                if isSelected {
-                    Rectangle()
-                        .fill(theme.accentColor)
-                        .frame(width: 3)
-                        .cornerRadius(1.5)
-                }
-                
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
@@ -75,7 +68,7 @@ struct EntryRowView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, isSelected ? 13 : 16)
+                .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             }
             .background(

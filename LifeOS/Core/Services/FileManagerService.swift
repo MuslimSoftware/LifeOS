@@ -290,15 +290,36 @@ class FileManagerService {
     
     private func extractJournalSection(from content: String) -> String {
         let withoutMetadata = stripMetadata(from: content)
-        
+
         guard let journalRange = withoutMetadata.range(of: "## Journal\n") else {
             return withoutMetadata.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        
+
         let journalContent = String(withoutMetadata[journalRange.upperBound...])
         return journalContent.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    
+
+    private func extractStickyNoteSection(from content: String) -> String {
+        let withoutMetadata = stripMetadata(from: content)
+
+        guard let notesRange = withoutMetadata.range(of: "## Notes\n") else {
+            return ""
+        }
+
+        let startIndex = notesRange.upperBound
+        let endIndex: String.Index
+
+        if let todoRange = withoutMetadata.range(of: "## TODOs") {
+            endIndex = todoRange.lowerBound
+        } else if let journalRange = withoutMetadata.range(of: "## Journal") {
+            endIndex = journalRange.lowerBound
+        } else {
+            endIndex = withoutMetadata.endIndex
+        }
+
+        return String(withoutMetadata[startIndex..<endIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     func loadTODOs(for entry: HumanEntry) -> [TODOItem] {
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
 
@@ -336,6 +357,33 @@ class FileManagerService {
         }
 
         return []
+    }
+
+    func loadStickyNoteForDate(date: Date) -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MMM d"
+        let dateString = dateFormatter.string(from: date)
+        let year = Calendar.current.component(.year, from: date)
+
+        do {
+            let fileURLs = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
+            let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
+
+            for fileURL in mdFiles {
+                guard let content = loadRawContent(from: fileURL) else {
+                    continue
+                }
+
+                if let metadata = parseMetadata(from: content),
+                   metadata.date == dateString && metadata.year == year {
+                    return extractStickyNoteSection(from: content)
+                }
+            }
+        } catch {
+            print("Error loading sticky note for date: \(error)")
+        }
+
+        return ""
     }
 
     func findExistingFileForDate(date: Date) -> String? {
@@ -575,6 +623,41 @@ class FileManagerService {
             print("✅ TODOs saved successfully for \(entry.filename)")
         } catch {
             print("❌ Failed to save TODOs: \(error)")
+        }
+    }
+
+    func saveStickyNote(_ text: String, for entry: HumanEntry) {
+        let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
+
+        let existingContent = loadRawContent(from: fileURL)
+        let journalSection = existingContent != nil ? extractJournalSection(from: existingContent!) : ""
+        let todoSection = existingContent != nil ? extractTODOSection(from: existingContent!) : ""
+
+        let metadata = "---\ndate: \(entry.date)\nyear: \(entry.year)\n---\n"
+        let newContent = """
+        \(metadata)## Notes
+        \(text)
+
+        \(todoSection)
+        ## Journal
+        \(journalSection)
+        """
+
+        guard let encryptionKey = KeychainService.shared.getOrCreateEncryptionKey() else {
+            print("Error: Could not get encryption key")
+            return
+        }
+
+        guard let encryptedData = EncryptionService.shared.encrypt(newContent, with: encryptionKey) else {
+            print("Error: Could not encrypt content")
+            return
+        }
+
+        do {
+            try encryptedData.write(to: fileURL, options: .atomic)
+            print("✅ Sticky note saved successfully for \(entry.filename)")
+        } catch {
+            print("❌ Failed to save sticky note: \(error)")
         }
     }
 }

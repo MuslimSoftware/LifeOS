@@ -21,71 +21,104 @@ struct TODOListView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("To-Do List")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(theme.primaryText)
-                .padding(.horizontal, 40)
-                .padding(.top, 24)
-                .padding(.bottom, 16)
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(theme.secondaryText)
+                Text("To-Do List")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(theme.primaryText)
+            }
+            .padding(.horizontal, 32)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 0) {
                     ForEach(todoViewModel.todos) { todo in
-                        TODORowView(
-                            todo: todo,
-                            hoveredTODOTimePickerId: $hoveredTODOTimePickerId,
-                            activeTimeComponent: $activeTimeComponent
-                        )
+                        VStack(spacing: 0) {
+                            TODORowView(
+                                todo: todo,
+                                hoveredTODOTimePickerId: $hoveredTODOTimePickerId,
+                                activeTimeComponent: $activeTimeComponent
+                            )
+                            
+                            if todo.id != todoViewModel.todos.last?.id {
+                                Divider()
+                                    .background(theme.dividerColor.opacity(0.3))
+                                    .padding(.leading, 32)
+                            }
+                        }
                     }
 
                     if isAddingTODO {
-                        HStack(spacing: 8) {
-                            Button(action: {}) {
-                                Image(systemName: "circle")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(theme.tertiaryText)
+                        VStack(spacing: 0) {
+                            if !todoViewModel.todos.isEmpty {
+                                Divider()
+                                    .background(theme.dividerColor.opacity(0.3))
+                                    .padding(.leading, 32)
+                            }
+                            
+                            HStack(spacing: 10) {
+                                Button(action: {}) {
+                                    Image(systemName: "circle")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(theme.tertiaryText)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(true)
+
+                                TextField("Add a task", text: $newTODOText)
+                                    .font(.system(size: 14))
+                                    .textFieldStyle(.plain)
+                                    .focused($isTextFieldFocused)
+                                    .onSubmit {
+                                        submitNewTODO()
+                                    }
+                            }
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 0)
+                        }
+                    }
+
+                    if !isAddingTODO {
+                        VStack(spacing: 0) {
+                            if !todoViewModel.todos.isEmpty {
+                                Divider()
+                                    .background(theme.dividerColor.opacity(0.3))
+                                    .padding(.leading, 32)
+                            }
+                            
+                            Button(action: {
+                                isAddingTODO = true
+                                isTextFieldFocused = true
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(theme.accentColor)
+                                    Text("Add task")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(theme.accentColor)
+                                }
+                                .padding(.vertical, 12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .buttonStyle(.plain)
-                            .disabled(true)
-
-                            TextField("Enter TODO", text: $newTODOText)
-                                .font(.system(size: 14))
-                                .textFieldStyle(.plain)
-                                .focused($isTextFieldFocused)
-                                .onSubmit {
-                                    submitNewTODO()
+                            .onHover { hovering in
+                                if hovering {
+                                    NSCursor.pointingHand.push()
+                                } else {
+                                    NSCursor.pop()
                                 }
-                        }
-                        .padding(12)
-                        .background(theme.dividerColor.opacity(0.15))
-                        .cornerRadius(8)
-                    }
-
-                    Button(action: {
-                        isAddingTODO = true
-                        isTextFieldFocused = true
-                    }) {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 16))
-                            .foregroundColor(theme.secondaryText)
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(theme.dividerColor.opacity(0.1))
-                            .cornerRadius(8)
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        if hovering {
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
+                            }
                         }
                     }
                 }
-                .padding(.horizontal, 40)
-                .padding(.bottom, 20)
+                .padding(.horizontal, 32)
+                .padding(.bottom, 24)
             }
-            .frame(height: 180)
+            .frame(height: 140)
         }
         .onAppear {
             NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
@@ -256,9 +289,10 @@ struct TODORowView: View {
                 }
             }
         }
-        .padding(12)
-        .background(theme.dividerColor.opacity(0.15))
-        .cornerRadius(8)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 0)
+        .background(isHovering ? theme.dividerColor.opacity(0.05) : Color.clear)
+        .animation(.easeInOut(duration: 0.15), value: isHovering)
         .onHover { hovering in
             isHovering = hovering
         }
@@ -342,10 +376,16 @@ struct TimePickerView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
-                .background(theme.dividerColor.opacity(0.18))
-                .cornerRadius(6)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(theme.dividerColor.opacity(0.2))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(theme.dividerColor.opacity(0.3), lineWidth: 0.5)
+                )
                 .contentShape(RoundedRectangle(cornerRadius: 6))
                 .onHover { hovering in
                     if !todo.completed {
@@ -366,11 +406,13 @@ struct TimePickerView: View {
             } else {
                 Button(action: handleIconTap) {
                     Image(systemName: "clock")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(theme.tertiaryText)
                         .padding(6)
-                        .background(theme.dividerColor.opacity(0.12))
-                        .cornerRadius(6)
+                        .background(
+                            Circle()
+                                .fill(theme.dividerColor.opacity(0.15))
+                        )
                 }
                 .buttonStyle(.plain)
                 .disabled(todo.completed)
