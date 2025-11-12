@@ -8,7 +8,7 @@ extension Notification.Name {
 class TODOViewModel {
     var todos: [TODOItem] = []
     private let fileService: FileManagerService
-    private var currentEntry: HumanEntry?
+    var currentEntry: HumanEntry?
     private var selectedDate: Date?
 
     init(fileService: FileManagerService) {
@@ -22,8 +22,9 @@ class TODOViewModel {
             currentEntry = entry
             todos = fileService.loadTODOs(for: entry)
         } else if let date = date {
-            todos = fileService.loadTODOsForDate(date: date)
-            currentEntry = nil
+            let (loadedTODOs, consolidatedEntry) = fileService.loadTODOsForDate(date: date)
+            todos = loadedTODOs
+            currentEntry = consolidatedEntry  // Use consolidated entry!
         } else {
             currentEntry = nil
             todos = []
@@ -91,22 +92,9 @@ class TODOViewModel {
     func saveTODOs() {
         // If no currentEntry but we have a selectedDate, create/find the entry
         if currentEntry == nil, let date = selectedDate {
-            if let existingFilename = fileService.findExistingFileForDate(date: date),
-               let uuidMatch = existingFilename.range(of: "\\[(.*?)\\]", options: .regularExpression),
-               let uuid = UUID(uuidString: String(existingFilename[uuidMatch].dropFirst().dropLast())) {
-                // Found existing file
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "MMM d"
-                let displayDate = dateFormatter.string(from: date)
-                let year = Calendar.current.component(.year, from: date)
-
-                currentEntry = HumanEntry(
-                    id: uuid,
-                    date: displayDate,
-                    filename: existingFilename,
-                    previewText: "",
-                    year: year
-                )
+            if let existingEntry = fileService.findExistingFileForDate(date: date) {
+                // Found existing file (possibly consolidated)
+                currentEntry = existingEntry
             } else {
                 // Create new entry file
                 currentEntry = HumanEntry.createWithDate(date: date)

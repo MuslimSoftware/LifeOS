@@ -82,6 +82,7 @@ struct CalendarView: View {
                                         .background(Color.clear)
                                         .padding(16)
                                         .frame(maxHeight: .infinity)
+                                        .hideScrollIndicators()
                                         .background(
                                             RoundedRectangle(cornerRadius: 12)
                                                 .fill(theme.backgroundColor)
@@ -333,37 +334,20 @@ struct CalendarView: View {
     private func createJournalForSelectedDay() {
         guard let selectedDay = selectedDay else { return }
 
-        if let existingFilename = entryListViewModel.fileService.findExistingFileForDate(date: selectedDay) {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "MMM d"
-            let displayDate = dateFormatter.string(from: selectedDay)
-            let year = calendar.component(.year, from: selectedDay)
+        if let entry = entryListViewModel.fileService.findExistingFileForDate(date: selectedDay) {
+            entryListViewModel.addEntryAndRefresh(entry)
+            entryListViewModel.expandSectionsForEntry(entry)
+            entryListViewModel.selectedEntryId = entry.id
 
-            if let uuidMatch = existingFilename.range(of: "\\[(.*?)\\]", options: .regularExpression),
-               let uuid = UUID(uuidString: String(existingFilename[uuidMatch].dropFirst().dropLast())) {
-
-                let entry = HumanEntry(
-                    id: uuid,
-                    date: displayDate,
-                    filename: existingFilename,
-                    previewText: "",
-                    year: year
-                )
-
-                entryListViewModel.addEntryAndRefresh(entry)
-                entryListViewModel.expandSectionsForEntry(entry)
-                entryListViewModel.selectedEntryId = entry.id
-
-                editorViewModel.isLoadingContent = true
-                if let content = entryListViewModel.loadEntry(entry: entry) {
-                    editorViewModel.text = content
-                } else {
-                    editorViewModel.text = ""
-                }
-                editorViewModel.isLoadingContent = false
-
-                selectedRoute = .journal
+            editorViewModel.isLoadingContent = true
+            if let content = entryListViewModel.loadEntry(entry: entry) {
+                editorViewModel.text = content
+            } else {
+                editorViewModel.text = ""
             }
+            editorViewModel.isLoadingContent = false
+
+            selectedRoute = .journal
         } else {
             let newEntry = HumanEntry.createWithDate(date: selectedDay)
 
@@ -408,25 +392,17 @@ struct CalendarView: View {
         let entries = entriesForSelectedDay(selectedDay)
         var entry = entries.first
 
-        // If no entry exists for this day, create one
-        if entry == nil {
-            if let existingFilename = entryListViewModel.fileService.findExistingFileForDate(date: selectedDay) {
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "MMM d"
-                let displayDate = dateFormatter.string(from: selectedDay)
-                let year = calendar.component(.year, from: selectedDay)
+        // If no journal entry exists, check if TODO has already created an entry for this day
+        if entry == nil, let todoEntry = todoViewModel?.currentEntry {
+            // Use the TODO's entry if it matches this day
+            entry = todoEntry
+        }
 
-                if let uuidMatch = existingFilename.range(of: "\\[(.*?)\\]", options: .regularExpression),
-                   let uuid = UUID(uuidString: String(existingFilename[uuidMatch].dropFirst().dropLast())) {
-                    entry = HumanEntry(
-                        id: uuid,
-                        date: displayDate,
-                        filename: existingFilename,
-                        previewText: "",
-                        year: year
-                    )
-                }
-            } else {
+        // If still no entry, find or create one
+        if entry == nil {
+            entry = entryListViewModel.fileService.findExistingFileForDate(date: selectedDay)
+            
+            if entry == nil {
                 let newEntry = HumanEntry.createWithDate(date: selectedDay)
                 entryListViewModel.fileService.saveEntry(newEntry, content: "")
                 entry = newEntry
@@ -434,6 +410,12 @@ struct CalendarView: View {
         }
 
         if let entry = entry {
+            // Update todoViewModel's entry reference if it matches this date
+            if let todoEntry = todoViewModel?.currentEntry,
+               todoEntry.date == entry.date && todoEntry.year == entry.year {
+                todoViewModel?.currentEntry = entry
+            }
+            
             entryListViewModel.fileService.saveStickyNote(stickyNoteText, for: entry)
         }
     }
@@ -458,7 +440,7 @@ struct CalendarView: View {
         for day in daysInMonth {
             guard let day = day else { continue }
 
-            let todos = entryListViewModel.fileService.loadTODOsForDate(date: day)
+            let (todos, _) = entryListViewModel.fileService.loadTODOsForDate(date: day)
             let incomplete = todos.filter { !$0.completed }.count
             let completed = todos.filter { $0.completed }.count
 

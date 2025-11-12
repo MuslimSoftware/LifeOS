@@ -1,6 +1,6 @@
 import Foundation
 
-struct TODOItem: Identifiable, Codable, Equatable {
+struct TODOItem: Identifiable, Codable, Equatable, Hashable {
     let id: UUID
     var text: String
     var completed: Bool
@@ -13,6 +13,10 @@ struct TODOItem: Identifiable, Codable, Equatable {
         self.completed = completed
         self.createdAt = createdAt
         self.dueTime = dueTime
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
     
     var tags: [String] {

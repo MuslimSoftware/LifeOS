@@ -25,13 +25,37 @@ class FileManagerService {
 
         let existingContent = loadRawContent(from: fileURL)
         let todoSection = existingContent != nil ? extractTODOSection(from: existingContent!) : ""
+        let notesSection = existingContent != nil ? extractStickyNoteSection(from: existingContent!) : ""
 
         let metadata = "---\ndate: \(entry.date)\nyear: \(entry.year)\n---\n"
 
         let contentWithMetadata: String
-        if !todoSection.isEmpty {
+        if !notesSection.isEmpty && !todoSection.isEmpty {
             contentWithMetadata = """
-            \(metadata)\(todoSection)
+            \(metadata)## Notes
+            \(notesSection)
+
+            ## TODOs
+            \(todoSection)
+
+            ## Journal
+            \(content)
+            """
+        } else if !notesSection.isEmpty {
+            contentWithMetadata = """
+            \(metadata)## Notes
+            \(notesSection)
+
+            ## TODOs
+
+            ## Journal
+            \(content)
+            """
+        } else if !todoSection.isEmpty {
+            contentWithMetadata = """
+            \(metadata)## TODOs
+            \(todoSection)
+
             ## Journal
             \(content)
             """
@@ -276,7 +300,7 @@ class FileManagerService {
             return ""
         }
         
-        let startIndex = todoRange.lowerBound
+        let startIndex = todoRange.upperBound  // Skip the "## TODOs\n" header
         let endIndex: String.Index
         
         if let journalRange = withoutMetadata.range(of: "## Journal") {
@@ -285,7 +309,7 @@ class FileManagerService {
             endIndex = withoutMetadata.endIndex
         }
         
-        return String(withoutMetadata[startIndex..<endIndex])
+        return String(withoutMetadata[startIndex..<endIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     private func extractJournalSection(from content: String) -> String {
@@ -331,7 +355,7 @@ class FileManagerService {
         return parseTODOs(from: todoSection)
     }
 
-    func loadTODOsForDate(date: Date) -> [TODOItem] {
+    func loadTODOsForDate(date: Date) -> (todos: [TODOItem], entry: HumanEntry?) {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MMM d"
         let dateString = dateFormatter.string(from: date)
@@ -341,6 +365,8 @@ class FileManagerService {
             let fileURLs = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
             let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
 
+            var matchingFiles: [(url: URL, content: String)] = []
+
             for fileURL in mdFiles {
                 guard let content = loadRawContent(from: fileURL) else {
                     continue
@@ -348,15 +374,33 @@ class FileManagerService {
 
                 if let metadata = parseMetadata(from: content),
                    metadata.date == dateString && metadata.year == year {
-                    let todoSection = extractTODOSection(from: content)
-                    return parseTODOs(from: todoSection)
+                    matchingFiles.append((url: fileURL, content: content))
                 }
+            }
+
+            // If multiple files found, consolidate them first
+            if matchingFiles.count > 1 {
+                if let consolidatedEntry = consolidateFiles(matchingFiles, date: dateString, year: year) {
+                    let fileURL = documentsDirectory.appendingPathComponent(consolidatedEntry.filename)
+                    if let content = loadRawContent(from: fileURL) {
+                        return (parseTODOs(from: extractTODOSection(from: content)), consolidatedEntry)
+                    }
+                }
+            } else if let first = matchingFiles.first {
+                // Parse entry for single file
+                let filename = first.url.lastPathComponent
+                var entry: HumanEntry?
+                if let uuidMatch = filename.range(of: "\\[(.*?)\\]", options: .regularExpression),
+                   let uuid = UUID(uuidString: String(filename[uuidMatch].dropFirst().dropLast())) {
+                    entry = HumanEntry(id: uuid, date: dateString, filename: filename, previewText: "", year: year)
+                }
+                return (parseTODOs(from: extractTODOSection(from: first.content)), entry)
             }
         } catch {
             print("Error loading TODOs for date: \(error)")
         }
 
-        return []
+        return ([], nil)
     }
 
     func loadStickyNoteForDate(date: Date) -> String {
@@ -369,6 +413,8 @@ class FileManagerService {
             let fileURLs = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
             let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
 
+            var matchingFiles: [(url: URL, content: String)] = []
+
             for fileURL in mdFiles {
                 guard let content = loadRawContent(from: fileURL) else {
                     continue
@@ -376,8 +422,20 @@ class FileManagerService {
 
                 if let metadata = parseMetadata(from: content),
                    metadata.date == dateString && metadata.year == year {
-                    return extractStickyNoteSection(from: content)
+                    matchingFiles.append((url: fileURL, content: content))
                 }
+            }
+
+            // If multiple files found, consolidate them first
+            if matchingFiles.count > 1 {
+                if let consolidatedEntry = consolidateFiles(matchingFiles, date: dateString, year: year) {
+                    let fileURL = documentsDirectory.appendingPathComponent(consolidatedEntry.filename)
+                    if let content = loadRawContent(from: fileURL) {
+                        return extractStickyNoteSection(from: content)
+                    }
+                }
+            } else if let first = matchingFiles.first {
+                return extractStickyNoteSection(from: first.content)
             }
         } catch {
             print("Error loading sticky note for date: \(error)")
@@ -386,7 +444,7 @@ class FileManagerService {
         return ""
     }
 
-    func findExistingFileForDate(date: Date) -> String? {
+    func findExistingFileForDate(date: Date) -> HumanEntry? {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MMM d"
         let dateString = dateFormatter.string(from: date)
@@ -396,6 +454,8 @@ class FileManagerService {
             let fileURLs = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
             let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
 
+            var matchingFiles: [(url: URL, content: String)] = []
+
             for fileURL in mdFiles {
                 guard let content = loadRawContent(from: fileURL) else {
                     continue
@@ -403,13 +463,130 @@ class FileManagerService {
 
                 if let metadata = parseMetadata(from: content),
                    metadata.date == dateString && metadata.year == year {
-                    return fileURL.lastPathComponent
+                    matchingFiles.append((url: fileURL, content: content))
+                }
+            }
+
+            // If multiple files found, consolidate and return consolidated entry
+            if matchingFiles.count > 1 {
+                return consolidateFiles(matchingFiles, date: dateString, year: year)
+            } else if let first = matchingFiles.first {
+                // Parse and return entry for single file
+                let filename = first.url.lastPathComponent
+                if let uuidMatch = filename.range(of: "\\[(.*?)\\]", options: .regularExpression),
+                   let uuid = UUID(uuidString: String(filename[uuidMatch].dropFirst().dropLast())) {
+                    
+                    return HumanEntry(
+                        id: uuid,
+                        date: dateString,
+                        filename: filename,
+                        previewText: "",
+                        year: year
+                    )
                 }
             }
         } catch {
             print("Error finding file for date: \(error)")
         }
 
+        return nil
+    }
+    
+    private func consolidateFiles(_ files: [(url: URL, content: String)], date: String, year: Int) -> HumanEntry? {
+        print("⚠️ Found \(files.count) files for \(date) \(year), consolidating...")
+        
+        var allNotes: [String] = []
+        var allTODOs: [TODOItem] = []
+        var journalContent: String = ""
+        
+        // Extract content from all files
+        for (url, content) in files {
+            let notes = extractStickyNoteSection(from: content)
+            if !notes.isEmpty {
+                allNotes.append(notes)
+            }
+            
+            let todos = parseTODOs(from: extractTODOSection(from: content))
+            allTODOs.append(contentsOf: todos)
+            
+            let journal = extractJournalSection(from: content)
+            if !journal.isEmpty && journal.count > journalContent.count {
+                journalContent = journal // Keep longest journal
+            }
+        }
+        
+        // Remove duplicates from TODOs using Set
+        var seenIDs = Set<UUID>()
+        var uniqueTODOs: [TODOItem] = []
+        for todo in allTODOs {
+            if !seenIDs.contains(todo.id) {
+                seenIDs.insert(todo.id)
+                uniqueTODOs.append(todo)
+            }
+        }
+        
+        // Keep the first file, update its content
+        let primaryFile = files[0]
+        let consolidatedNotes = allNotes.joined(separator: "\n\n")
+        
+        // Build consolidated content
+        let metadata = "---\ndate: \(date)\nyear: \(year)\n---\n"
+        var newContent = metadata
+        
+        if !consolidatedNotes.isEmpty {
+            newContent += "## Notes\n\(consolidatedNotes)\n\n"
+        }
+        
+        newContent += "## TODOs\n"
+        for todo in uniqueTODOs {
+            let checkbox = todo.completed ? "[x]" : "[ ]"
+            var line = "- \(checkbox) \(todo.text)"
+            if let dueTime = todo.dueTime {
+                let calendar = Calendar.current
+                let hour = calendar.component(.hour, from: dueTime)
+                let minute = calendar.component(.minute, from: dueTime)
+                let period = hour >= 12 ? "PM" : "AM"
+                let displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour)
+                line += " @\(displayHour):\(String(format: "%02d", minute)) \(period)"
+            }
+            newContent += "\(line)\n"
+        }
+        
+        newContent += "\n## Journal\n\(journalContent)"
+        
+        // Save consolidated content
+        guard let encryptionKey = KeychainService.shared.getOrCreateEncryptionKey(),
+              let encryptedData = EncryptionService.shared.encrypt(newContent, with: encryptionKey) else {
+            return nil
+        }
+        
+        do {
+            try encryptedData.write(to: primaryFile.url, options: .atomic)
+            print("✅ Consolidated to \(primaryFile.url.lastPathComponent)")
+            
+            // Delete duplicate files
+            for (url, _) in files.dropFirst() {
+                try? fileManager.removeItem(at: url)
+                print("🗑️ Deleted duplicate: \(url.lastPathComponent)")
+            }
+            
+            // Extract UUID from primary file name and return consolidated entry
+            let filename = primaryFile.url.lastPathComponent
+            if let uuidMatch = filename.range(of: "\\[(.*?)\\]", options: .regularExpression),
+               let uuid = UUID(uuidString: String(filename[uuidMatch].dropFirst().dropLast())) {
+                
+                return HumanEntry(
+                    id: uuid,
+                    date: date,
+                    filename: filename,
+                    previewText: "",
+                    year: year
+                )
+            }
+        } catch {
+            print("❌ Error consolidating files: \(error)")
+        }
+        
         return nil
     }
     
@@ -580,6 +757,7 @@ class FileManagerService {
 
         let existingContent = loadRawContent(from: fileURL)
         let journalSection = existingContent != nil ? extractJournalSection(from: existingContent!) : ""
+        let notesSection = existingContent != nil ? extractStickyNoteSection(from: existingContent!) : ""
 
         let todoLines = todos.map { todo in
             let checkbox = todo.completed ? "[x]" : "[ ]"
@@ -600,13 +778,27 @@ class FileManagerService {
         }.joined(separator: "\n")
 
         let metadata = "---\ndate: \(entry.date)\nyear: \(entry.year)\n---\n"
-        let newContent = """
-        \(metadata)## TODOs
-        \(todoLines)
+        let newContent: String
+        if !notesSection.isEmpty {
+            newContent = """
+            \(metadata)## Notes
+            \(notesSection)
 
-        ## Journal
-        \(journalSection)
-        """
+            ## TODOs
+            \(todoLines)
+
+            ## Journal
+            \(journalSection)
+            """
+        } else {
+            newContent = """
+            \(metadata)## TODOs
+            \(todoLines)
+
+            ## Journal
+            \(journalSection)
+            """
+        }
 
         guard let encryptionKey = KeychainService.shared.getOrCreateEncryptionKey() else {
             print("Error: Could not get encryption key")
@@ -634,14 +826,29 @@ class FileManagerService {
         let todoSection = existingContent != nil ? extractTODOSection(from: existingContent!) : ""
 
         let metadata = "---\ndate: \(entry.date)\nyear: \(entry.year)\n---\n"
-        let newContent = """
-        \(metadata)## Notes
-        \(text)
+        let newContent: String
+        if !todoSection.isEmpty {
+            newContent = """
+            \(metadata)## Notes
+            \(text)
 
-        \(todoSection)
-        ## Journal
-        \(journalSection)
-        """
+            ## TODOs
+            \(todoSection)
+
+            ## Journal
+            \(journalSection)
+            """
+        } else {
+            newContent = """
+            \(metadata)## Notes
+            \(text)
+
+            ## TODOs
+
+            ## Journal
+            \(journalSection)
+            """
+        }
 
         guard let encryptionKey = KeychainService.shared.getOrCreateEncryptionKey() else {
             print("Error: Could not get encryption key")

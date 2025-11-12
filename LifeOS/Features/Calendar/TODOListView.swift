@@ -118,6 +118,7 @@ struct TODOListView: View {
                 .padding(.horizontal, 32)
                 .padding(.bottom, 24)
             }
+            .hideScrollIndicators()
             .frame(height: 140)
         }
         .onAppear {
