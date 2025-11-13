@@ -40,7 +40,7 @@ struct ScrollableValueControl<Value>: View {
                 if hoveredControl == identifier {
                     Image(systemName: "arrow.up.arrow.down")
                         .font(.system(size: 10))
-                        .foregroundColor(.white)
+                        .foregroundColor(theme.primaryText)
                         .offset(x: -12)
                 }
             }

@@ -14,35 +14,9 @@ struct AIChatView: View {
     @Environment(SidebarHoverManager.self) private var hoverManager
     @StateObject private var viewModel: AIChatViewModel
     @State private var messageText: String = ""
-    @State private var scrollToMessageId: UUID?
 
     init(agentKernel: AgentKernel) {
         _viewModel = StateObject(wrappedValue: AIChatViewModel(agentKernel: agentKernel))
-    }
-
-    private func groupMessagesByDate() -> [(date: Date, messages: [ChatMessage])] {
-        let calendar = Calendar.current
-        let grouped = Dictionary(grouping: viewModel.currentMessages) { message in
-            calendar.startOfDay(for: message.timestamp)
-        }
-        return grouped.sorted { $0.key < $1.key }.map { (date: $0.key, messages: $0.value.sorted { $0.timestamp < $1.timestamp }) }
-    }
-
-    private func formatDateLabel(_ date: Date) -> String {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let messageDate = calendar.startOfDay(for: date)
-
-        if messageDate == today {
-            return "Today"
-        } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: today), messageDate == yesterday {
-            return "Yesterday"
-        } else {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .long
-            formatter.timeStyle = .none
-            return formatter.string(from: date)
-        }
     }
 
     var body: some View {
@@ -52,15 +26,18 @@ struct AIChatView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // Messages
-                    messagesView
+                    // Messages container
+                    ChatMessagesContainerView(
+                        messages: viewModel.currentMessages,
+                        isLoading: viewModel.isLoading
+                    )
 
                     // Error banner
                     if let error = viewModel.error {
                         errorBanner(error)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 8)
                     }
-
-                    Spacer()
 
                     // Input
                     ChatInputView(
@@ -72,6 +49,7 @@ struct AIChatView: View {
                         },
                         isLoading: viewModel.isLoading
                     )
+                    .padding(.horizontal, 20)
                     .padding(.bottom, 50)
                 }
             }
@@ -112,144 +90,6 @@ struct AIChatView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: hoverManager.isRightSidebarOpen(for: .aiChat))
-    }
-
-    private var messagesView: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 16) {
-                    if viewModel.currentMessages.isEmpty {
-                        emptyStateView
-                    } else {
-                        ForEach(groupMessagesByDate(), id: \.date) { group in
-                            // Date separator
-                            Text(formatDateLabel(group.date))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.vertical, 8)
-
-                            // Messages for this date
-                            ForEach(group.messages) { message in
-                                MessageBubbleView(message: message)
-                                    .padding(.horizontal)
-                            }
-                        }
-                    }
-
-                    if viewModel.isLoading {
-                        TypingIndicatorView()
-                            .padding(.horizontal)
-                    }
-
-                    Color.clear
-                        .frame(height: 1)
-                        .id("bottomMarker")
-                }
-                .frame(maxWidth: 800)
-                .padding(.top, 24)
-                .padding(.bottom, 24)
-            }
-            .scrollIndicators(.never)
-            .background(theme.surfaceColor)
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    proxy.scrollTo("bottomMarker", anchor: .bottom)
-                }
-            }
-            .onChange(of: viewModel.currentMessages.count) { oldCount, newCount in
-                // Only auto-scroll if we're adding messages (not removing)
-                if newCount > oldCount {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        withAnimation {
-                            proxy.scrollTo("bottomMarker", anchor: .bottom)
-                        }
-                    }
-                }
-            }
-            .onChange(of: viewModel.currentConversationId) { _, _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    withAnimation {
-                        proxy.scrollTo("bottomMarker", anchor: .bottom)
-                    }
-                }
-            }
-            .onChange(of: viewModel.isLoading) { _, isLoading in
-                if isLoading {
-                    // Scroll to bottom when loading starts
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        withAnimation {
-                            proxy.scrollTo("bottomMarker", anchor: .bottom)
-                        }
-                    }
-                }
-            }
-            .onChange(of: scrollToMessageId) { _, messageId in
-                if let messageId = messageId {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        withAnimation {
-                            proxy.scrollTo(messageId, anchor: .center)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
-                .padding(.top, 80)
-
-            VStack(spacing: 8) {
-                Text("Ask me anything")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-
-                Text("I can help you understand patterns in your journal, reflect on experiences, and gain insights about your life.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
-            }
-
-            VStack(spacing: 12) {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    ForEach([
-                        "Summarize my recent journal entries",
-                        "What themes appear in my journal?",
-                        "Help me reflect on my week",
-                        "What patterns do you notice in my writing?"
-                    ], id: \.self) { suggestion in
-                        Button(action: {
-                            messageText = suggestion
-                        }) {
-                            Text(suggestion)
-                                .font(.subheadline)
-                                .foregroundColor(theme.primaryText)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .frame(maxWidth: .infinity)
-                                .background(theme.hoveredBackground)
-                                .cornerRadius(12)
-                        }
-                        .buttonStyle(.plain)
-                        .onHover { hovering in
-                            if hovering {
-                                NSCursor.pointingHand.push()
-                            } else {
-                                NSCursor.pop()
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(.top)
-        }
-        .padding()
-        .frame(maxHeight: .infinity, alignment: .center)
     }
 
     private func errorBanner(_ error: String) -> some View {

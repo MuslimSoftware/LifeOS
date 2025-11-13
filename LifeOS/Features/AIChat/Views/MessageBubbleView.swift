@@ -13,9 +13,9 @@ struct MessageBubbleView: View {
     let message: ChatMessage
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 0) {
             if message.role == .user {
-                Spacer(minLength: 50)
+                Spacer(minLength: 0)
             }
 
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 6) {
@@ -23,7 +23,6 @@ struct MessageBubbleView: View {
                 Text(markdownAttributedString)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
                     .background(bubbleColor)
                     .foregroundColor(textColor)
@@ -43,10 +42,10 @@ struct MessageBubbleView: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
-            .frame(maxWidth: 600)
+            .frame(maxWidth: 600, alignment: message.role == .user ? .trailing : .leading)
 
             if message.role == .assistant {
-                Spacer(minLength: 50)
+                Spacer(minLength: 0)
             }
         }
         .id(message.id)

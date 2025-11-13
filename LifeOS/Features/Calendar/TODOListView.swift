@@ -30,8 +30,8 @@ struct TODOListView: View {
                     .foregroundColor(theme.primaryText)
             }
             .padding(.horizontal, 32)
-            .padding(.top, 24)
-            .padding(.bottom, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -46,7 +46,7 @@ struct TODOListView: View {
                             if todo.id != todoViewModel.todos.last?.id {
                                 Divider()
                                     .background(theme.dividerColor.opacity(0.3))
-                                    .padding(.leading, 32)
+                                    .padding(.leading, 40)
                             }
                         }
                     }
@@ -56,7 +56,7 @@ struct TODOListView: View {
                             if !todoViewModel.todos.isEmpty {
                                 Divider()
                                     .background(theme.dividerColor.opacity(0.3))
-                                    .padding(.leading, 32)
+                                    .padding(.leading, 40)
                             }
                             
                             HStack(spacing: 10) {
@@ -86,7 +86,7 @@ struct TODOListView: View {
                             if !todoViewModel.todos.isEmpty {
                                 Divider()
                                     .background(theme.dividerColor.opacity(0.3))
-                                    .padding(.leading, 32)
+                                    .padding(.leading, 40)
                             }
                             
                             Button(action: {
@@ -116,7 +116,7 @@ struct TODOListView: View {
                     }
                 }
                 .padding(.horizontal, 32)
-                .padding(.bottom, 24)
+                .padding(.bottom, 16)
             }
             .hideScrollIndicators()
             .frame(height: 140)
@@ -131,19 +131,18 @@ struct TODOListView: View {
                 }
 
                 scrollAccumulator += event.deltaY
-                let threshold: CGFloat = 3
 
-                while scrollAccumulator >= threshold {
+                if scrollAccumulator > 3 {
+                    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
                     adjustTime(by: 1, component: component, for: hoveredTODO)
-                    scrollAccumulator -= threshold
-                }
-
-                while scrollAccumulator <= -threshold {
+                    scrollAccumulator = 0
+                } else if scrollAccumulator < -3 {
+                    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
                     adjustTime(by: -1, component: component, for: hoveredTODO)
-                    scrollAccumulator += threshold
+                    scrollAccumulator = 0
                 }
 
-                return nil
+                return event
             }
         }
     }
@@ -291,8 +290,11 @@ struct TODORowView: View {
             }
         }
         .padding(.vertical, 12)
-        .padding(.horizontal, 0)
-        .background(isHovering ? theme.dividerColor.opacity(0.05) : Color.clear)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isHovering ? theme.dividerColor.opacity(0.05) : Color.clear)
+        )
         .animation(.easeInOut(duration: 0.15), value: isHovering)
         .onHover { hovering in
             isHovering = hovering
@@ -362,6 +364,11 @@ struct TimePickerView: View {
                     }
 
                     if isHoveringTime {
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.system(size: 10))
+                            .foregroundColor(theme.primaryText)
+                            .padding(.leading, 2)
+
                         Button(action: clearDueTime) {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 12))
