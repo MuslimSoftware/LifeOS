@@ -29,6 +29,7 @@ struct TODOListView: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(theme.primaryText)
             }
+            .padding(.horizontal, 8)
             .padding(.horizontal, 32)
             .padding(.top, 16)
             .padding(.bottom, 12)

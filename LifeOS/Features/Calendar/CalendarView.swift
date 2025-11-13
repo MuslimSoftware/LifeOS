@@ -98,9 +98,21 @@ struct CalendarView: View {
                                     .fill(theme.dividerColor.opacity(0.3))
                                     .frame(width: 1)
 
-                                TODOListView()
-                                    .environment(todoVM)
-                                    .frame(maxWidth: .infinity)
+                                VStack(spacing: 0) {
+                                    let entries = entriesForSelectedDay(selectedDay)
+                                    if let entry = entries.first {
+                                        JournalEntryIndicator(
+                                            entry: entry,
+                                            theme: theme,
+                                            onTap: { openEntry(entry) }
+                                        )
+                                        .padding(.top, 8)
+                                    }
+
+                                    TODOListView()
+                                        .environment(todoVM)
+                                }
+                                .frame(maxWidth: .infinity)
 
                                 Spacer()
                             }
@@ -548,9 +560,9 @@ struct JournalEntryCard: View {
     let entry: HumanEntry
     let theme: Theme
     let onTap: () -> Void
-    
+
     @State private var isHovering = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !entry.previewText.isEmpty {
@@ -587,6 +599,62 @@ struct JournalEntryCard: View {
                 NSCursor.pop()
             }
         }
+    }
+}
+
+struct JournalEntryIndicator: View {
+    let entry: HumanEntry
+    let theme: Theme
+    let onTap: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(theme.secondaryText)
+
+                Text("Journal Entry")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(theme.primaryText)
+
+                Spacer()
+            }
+
+            HStack(spacing: 8) {
+                Text(entry.previewText.isEmpty ? "Empty entry" : entry.previewText)
+                    .font(.system(size: 12))
+                    .foregroundColor(entry.previewText.isEmpty ? theme.tertiaryText : theme.secondaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(theme.tertiaryText)
+                    .opacity(isHovering ? 1.0 : 0.5)
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovering ? theme.dividerColor.opacity(0.1) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
+        }
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .padding(.horizontal, 32)
     }
 }
 
