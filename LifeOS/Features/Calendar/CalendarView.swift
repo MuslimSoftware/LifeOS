@@ -15,6 +15,7 @@ struct CalendarView: View {
     @State private var todoViewModel: TODOViewModel?
     @State private var todoCounts: [String: (incomplete: Int, completed: Int)] = [:]
     @State private var stickyNoteText: String = ""
+    @State private var saveTimer: Timer?
 
     private let calendar = Calendar.current
     private let daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -220,12 +221,23 @@ struct CalendarView: View {
                     return event
                 }
             }
-            .onChange(of: selectedDay) {
+            .onChange(of: selectedDay) { oldDay, newDay in
+                // Save any pending sticky note changes for the old day before switching
+                if let oldDay = oldDay {
+                    saveTimer?.invalidate()
+                    saveTimer = nil
+                    saveStickyNote(for: oldDay, text: stickyNoteText)
+                }
+
                 updateTODOsForSelectedDay()
                 loadStickyNoteForSelectedDay()
             }
             .onChange(of: stickyNoteText) { oldValue, newValue in
-                saveStickyNoteForSelectedDay()
+                // Debounce sticky note saves to prevent excessive file writes
+                saveTimer?.invalidate()
+                saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                    saveStickyNoteForSelectedDay()
+                }
             }
             .onChange(of: todoViewModel?.todos.count) { oldValue, newValue in
                 if let selectedDay = selectedDay {
@@ -398,24 +410,29 @@ struct CalendarView: View {
         stickyNoteText = entryListViewModel.fileService.loadStickyNoteForDate(date: selectedDay)
     }
 
-    private func saveStickyNoteForSelectedDay() {
-        guard let selectedDay = selectedDay else { return }
-
-        let entries = entriesForSelectedDay(selectedDay)
+    private func saveStickyNote(for day: Date, text: String) {
+        let entries = entriesForSelectedDay(day)
         var entry = entries.first
 
         // If no journal entry exists, check if TODO has already created an entry for this day
         if entry == nil, let todoEntry = todoViewModel?.currentEntry {
             // Use the TODO's entry if it matches this day
-            entry = todoEntry
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "MMM d"
+            let dayString = dateFormatter.string(from: day)
+            let dayYear = calendar.component(.year, from: day)
+
+            if todoEntry.date == dayString && todoEntry.year == dayYear {
+                entry = todoEntry
+            }
         }
 
         // If still no entry, find or create one
         if entry == nil {
-            entry = entryListViewModel.fileService.findExistingFileForDate(date: selectedDay)
-            
+            entry = entryListViewModel.fileService.findExistingFileForDate(date: day)
+
             if entry == nil {
-                let newEntry = HumanEntry.createWithDate(date: selectedDay)
+                let newEntry = HumanEntry.createWithDate(date: day)
                 entryListViewModel.fileService.saveEntry(newEntry, content: "")
                 entry = newEntry
             }
@@ -427,9 +444,14 @@ struct CalendarView: View {
                todoEntry.date == entry.date && todoEntry.year == entry.year {
                 todoViewModel?.currentEntry = entry
             }
-            
-            entryListViewModel.fileService.saveStickyNote(stickyNoteText, for: entry)
+
+            entryListViewModel.fileService.saveStickyNote(text, for: entry)
         }
+    }
+
+    private func saveStickyNoteForSelectedDay() {
+        guard let selectedDay = selectedDay else { return }
+        saveStickyNote(for: selectedDay, text: stickyNoteText)
     }
 
     private func updateTODOCountsForDate(_ date: Date) {

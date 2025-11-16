@@ -494,27 +494,27 @@ class FileManagerService {
     
     private func consolidateFiles(_ files: [(url: URL, content: String)], date: String, year: Int) -> HumanEntry? {
         print("⚠️ Found \(files.count) files for \(date) \(year), consolidating...")
-        
+
         var allNotes: [String] = []
         var allTODOs: [TODOItem] = []
-        var journalContent: String = ""
-        
+        var allJournals: [String] = []
+
         // Extract content from all files
-        for (url, content) in files {
+        for (_, content) in files {
             let notes = extractStickyNoteSection(from: content)
             if !notes.isEmpty {
                 allNotes.append(notes)
             }
-            
+
             let todos = parseTODOs(from: extractTODOSection(from: content))
             allTODOs.append(contentsOf: todos)
-            
+
             let journal = extractJournalSection(from: content)
-            if !journal.isEmpty && journal.count > journalContent.count {
-                journalContent = journal // Keep longest journal
+            if !journal.isEmpty {
+                allJournals.append(journal) // Collect all journals
             }
         }
-        
+
         // Remove duplicates from TODOs using Set
         var seenIDs = Set<UUID>()
         var uniqueTODOs: [TODOItem] = []
@@ -524,10 +524,32 @@ class FileManagerService {
                 uniqueTODOs.append(todo)
             }
         }
-        
-        // Keep the first file, update its content
-        let primaryFile = files[0]
-        let consolidatedNotes = allNotes.joined(separator: "\n\n")
+
+        // Prioritize file with journal content as primary, otherwise use first file
+        let primaryFile: (url: URL, content: String)
+        if let fileWithJournal = files.first(where: { !extractJournalSection(from: $0.content).isEmpty }) {
+            primaryFile = fileWithJournal
+        } else {
+            primaryFile = files[0]
+        }
+
+        // Deduplicate sticky notes before joining
+        var uniqueNotes: [String] = []
+        for note in allNotes {
+            if !uniqueNotes.contains(note) {
+                uniqueNotes.append(note)
+            }
+        }
+        let consolidatedNotes = uniqueNotes.joined(separator: "\n\n")
+
+        // Merge all journals with separators if there are multiple unique journals
+        var uniqueJournals: [String] = []
+        for journal in allJournals {
+            if !uniqueJournals.contains(journal) {
+                uniqueJournals.append(journal)
+            }
+        }
+        let journalContent = uniqueJournals.joined(separator: "\n\n---\n\n")
         
         // Build consolidated content
         let metadata = "---\ndate: \(date)\nyear: \(year)\n---\n"
@@ -819,13 +841,31 @@ class FileManagerService {
     }
 
     func saveStickyNote(_ text: String, for entry: HumanEntry) {
-        let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
+        // Refresh entry to get the latest consolidated file
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MMM d"
+        guard let entryDate = dateFormatter.date(from: entry.date) else {
+            print("❌ Failed to parse entry date: \(entry.date)")
+            return
+        }
+
+        var components = Calendar.current.dateComponents([.month, .day], from: entryDate)
+        components.year = entry.year
+        components.hour = 12
+
+        guard let fullDate = Calendar.current.date(from: components),
+              let latestEntry = findExistingFileForDate(date: fullDate) else {
+            print("❌ Failed to find existing file for date")
+            return
+        }
+
+        let fileURL = documentsDirectory.appendingPathComponent(latestEntry.filename)
 
         let existingContent = loadRawContent(from: fileURL)
         let journalSection = existingContent != nil ? extractJournalSection(from: existingContent!) : ""
         let todoSection = existingContent != nil ? extractTODOSection(from: existingContent!) : ""
 
-        let metadata = "---\ndate: \(entry.date)\nyear: \(entry.year)\n---\n"
+        let metadata = "---\ndate: \(latestEntry.date)\nyear: \(latestEntry.year)\n---\n"
         let newContent: String
         if !todoSection.isEmpty {
             newContent = """
@@ -862,7 +902,7 @@ class FileManagerService {
 
         do {
             try encryptedData.write(to: fileURL, options: .atomic)
-            print("✅ Sticky note saved successfully for \(entry.filename)")
+            print("✅ Sticky note saved successfully for \(latestEntry.filename)")
         } catch {
             print("❌ Failed to save sticky note: \(error)")
         }
