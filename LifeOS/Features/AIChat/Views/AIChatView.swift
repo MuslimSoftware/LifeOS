@@ -13,10 +13,16 @@ struct AIChatView: View {
     @Environment(\.theme) private var theme
     @Environment(SidebarHoverManager.self) private var hoverManager
     @StateObject private var viewModel: AIChatViewModel
+    @StateObject private var embeddingService = EmbeddingProcessingService.shared
     @State private var messageText: String = ""
+    @State private var conversationToDelete: UUID?
 
     init(agentKernel: AgentKernel) {
         _viewModel = StateObject(wrappedValue: AIChatViewModel(agentKernel: agentKernel))
+    }
+
+    private var bottomBarHeight: CGFloat {
+        return 72  // 60pt bar + 12pt padding
     }
 
     var body: some View {
@@ -50,7 +56,13 @@ struct AIChatView: View {
                         isLoading: viewModel.isLoading
                     )
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 50)
+                    .padding(.bottom, bottomBarHeight)
+                }
+
+                // Bottom bar with embedding progress (overlaid)
+                VStack {
+                    Spacer()
+                    ChatBottomBarView(embeddingService: embeddingService)
                 }
             }
             .overlay(
@@ -78,7 +90,7 @@ struct AIChatView: View {
                         viewModel.switchConversation(id: conversationId)
                     },
                     onDeleteConversation: { conversationId in
-                        viewModel.deleteConversation(id: conversationId)
+                        conversationToDelete = conversationId
                     },
                     onCopyConversation: { conversationId in
                         copyConversationToClipboard(conversationId: conversationId)
@@ -90,6 +102,25 @@ struct AIChatView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: hoverManager.isRightSidebarOpen(for: .aiChat))
+        .onAppear {
+            embeddingService.loadStats()
+        }
+        .alert("Delete Conversation", isPresented: Binding(
+            get: { conversationToDelete != nil },
+            set: { if !$0 { conversationToDelete = nil } }
+        )) {
+            Button("Cancel", role: .cancel) {
+                conversationToDelete = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let id = conversationToDelete {
+                    viewModel.deleteConversation(id: id)
+                }
+                conversationToDelete = nil
+            }
+        } message: {
+            Text("Are you sure you want to delete this conversation? This action cannot be undone.")
+        }
     }
 
     private func errorBanner(_ error: String) -> some View {

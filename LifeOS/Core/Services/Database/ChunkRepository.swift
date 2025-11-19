@@ -128,6 +128,8 @@ class ChunkRepository {
         try dbService.getQueue().write { db in
             try db.execute(sql: "DELETE FROM chunks")
             try db.execute(sql: "DELETE FROM chunks_fts")
+            // Reclaim disk space by compacting the database
+            try db.execute(sql: "VACUUM")
         }
     }
 

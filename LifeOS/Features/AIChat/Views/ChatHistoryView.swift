@@ -23,7 +23,6 @@ struct ChatHistoryView: View {
     @State private var hoveredConversationId: UUID?
     @State private var hoveredTrashId: UUID?
     @State private var hoveredCopyId: UUID?
-    @State private var conversationToDelete: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -106,7 +105,7 @@ struct ChatHistoryView: View {
                                     hoveredTrashId: hoveredTrashId,
                                     hoveredCopyId: hoveredCopyId,
                                     onTap: { onConversationTap(conversation.id) },
-                                    onDelete: { conversationToDelete = conversation.id },
+                                    onDelete: { onDeleteConversation(conversation.id) },
                                     onCopy: { onCopyConversation(conversation.id) },
                                     onTrashHover: { hovering in
                                         hoveredTrashId = hovering ? conversation.id : nil
@@ -134,22 +133,6 @@ struct ChatHistoryView: View {
         }
         .frame(width: 200)
         .background(theme.backgroundColor)
-        .alert("Delete Conversation", isPresented: Binding(
-            get: { conversationToDelete != nil },
-            set: { if !$0 { conversationToDelete = nil } }
-        )) {
-            Button("Cancel", role: .cancel) {
-                conversationToDelete = nil
-            }
-            Button("Delete", role: .destructive) {
-                if let id = conversationToDelete {
-                    onDeleteConversation(id)
-                }
-                conversationToDelete = nil
-            }
-        } message: {
-            Text("Are you sure you want to delete this conversation? This action cannot be undone.")
-        }
     }
 
     private func groupedConversations() -> [(date: Date, conversations: [Conversation])] {

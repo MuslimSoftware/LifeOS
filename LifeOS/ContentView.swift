@@ -16,7 +16,7 @@ struct ContentView: View {
     @State private var databaseService: DatabaseService?
     @State private var agentKernel: AgentKernel?
 
-    // Authentication
+    // Authentication 
     @State private var authManager = AuthenticationManager.shared
     @State private var hasCheckedAuth = false
 

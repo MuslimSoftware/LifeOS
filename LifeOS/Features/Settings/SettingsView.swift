@@ -684,7 +684,7 @@ struct SettingsView: View {
                         .font(.system(size: 12))
                         .foregroundColor(theme.secondaryText)
                     Spacer()
-                    Text("\(entriesWithEmbeddings) (\(embeddingsPercentage)%)")
+                    Text(entriesWithEmbeddings > 0 ? "\(entriesWithEmbeddings) (\(embeddingsPercentage)%)" : "\(entriesWithEmbeddings)")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(theme.primaryText)
                 }
@@ -1020,19 +1020,14 @@ struct SettingsView: View {
     }
 
     private func loadEmbeddingsStats() {
-        totalEntries = fileService.loadExistingEntries().count
+        let embeddingService = EmbeddingProcessingService.shared
+        embeddingService.loadStats()
 
+        totalEntries = embeddingService.totalEntries
+        entriesWithEmbeddings = embeddingService.processedEntries
+
+        // Calculate database size
         do {
-            let dbService = DatabaseService.shared
-            try dbService.initialize()
-            let chunkRepo = ChunkRepository(dbService: dbService)
-
-            // Count unique entry IDs that have embeddings
-            let allChunks = try chunkRepo.getAllChunks()
-            let uniqueEntryIds = Set(allChunks.map { $0.entryId })
-            entriesWithEmbeddings = uniqueEntryIds.count
-
-            // Calculate database size
             let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let dbURL = documentsPath.appendingPathComponent("LifeOS/analytics.db")
             if FileManager.default.fileExists(atPath: dbURL.path) {
@@ -1042,22 +1037,22 @@ struct SettingsView: View {
                 }
             }
         } catch {
-            print("⚠️ Failed to load embeddings stats: \(error)")
+            print("⚠️ Failed to load database size: \(error)")
         }
     }
 
     private func processAllEntries() {
-        Task {
-            isProcessing = true
-            defer { isProcessing = false }
+        Task { @MainActor in
+            let embeddingService = EmbeddingProcessingService.shared
+            embeddingService.processAllEntries()
 
-            let entries = fileService.loadExistingEntries()
-            print("📊 Processing \(entries.count) entries for embeddings...")
+            // Observe processing state
+            while embeddingService.isProcessing {
+                isProcessing = true
+                try? await Task.sleep(nanoseconds: 500_000_000) // Poll every 0.5s
+            }
 
-            // TODO: Implement batch processing with IngestionService
-            // This will need to create chunks and generate embeddings for each entry
-            // For now, this is a placeholder
-
+            isProcessing = false
             loadEmbeddingsStats()
         }
     }

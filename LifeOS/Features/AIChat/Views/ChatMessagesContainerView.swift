@@ -64,9 +64,13 @@ struct ChatMessagesContainerView: View {
                     }
 
                     if isLoading {
-                        TypingIndicatorView()
-                            .padding(.horizontal, 20)
-                            .padding(.top, 16)
+                        VStack {
+                            TypingIndicatorView()
+                                .padding(.horizontal, 20)
+                                .padding(.top, 16)
+                        }
+                        .frame(maxWidth: 800)
+                        .frame(maxWidth: .infinity)
                     }
 
                     Color.clear.frame(height: 32)

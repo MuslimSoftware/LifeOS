@@ -13,6 +13,7 @@ struct HumanEntry: Identifiable {
         let now = Date()
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
+        dateFormatter.timeZone = TimeZone.current
         let dateString = dateFormatter.string(from: now)
         
         dateFormatter.dateFormat = "MMM d"
@@ -34,6 +35,7 @@ struct HumanEntry: Identifiable {
         let id = UUID()
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
+        dateFormatter.timeZone = TimeZone.current
         let timestampString = dateFormatter.string(from: Date())
         
         dateFormatter.dateFormat = "MMM d"
