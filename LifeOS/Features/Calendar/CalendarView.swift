@@ -255,6 +255,14 @@ struct CalendarView: View {
             .onReceive(NotificationCenter.default.publisher(for: .todosDidChange)) { _ in
                 refreshTODOCounts()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .entriesDidConsolidate)) { _ in
+                // Reload entries when consolidation happens
+                _ = entryListViewModel.loadExistingEntries()
+                refreshTODOCounts()
+                if selectedDay != nil {
+                    loadStickyNoteForSelectedDay()
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.backgroundColor)

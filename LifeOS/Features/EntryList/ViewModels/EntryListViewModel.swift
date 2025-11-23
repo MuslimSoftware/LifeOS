@@ -25,9 +25,11 @@ class EntryListViewModel {
     }
 
     let fileService: FileManagerService
+    let chunkRepository: ChunkRepository
     
-    init(fileService: FileManagerService) {
+    init(fileService: FileManagerService, chunkRepository: ChunkRepository = ChunkRepository()) {
         self.fileService = fileService
+        self.chunkRepository = chunkRepository
     }
     
     func loadExistingEntries() -> String? {
@@ -176,6 +178,7 @@ class EntryListViewModel {
         
         do {
             try fileService.deleteEntry(entry)
+            try? chunkRepository.deleteChunks(forEntryId: entry.id)
             
             if let index = entries.firstIndex(where: { $0.id == entry.id }) {
                 entries.remove(at: index)

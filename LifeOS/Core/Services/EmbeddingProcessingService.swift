@@ -31,15 +31,19 @@ class EmbeddingProcessingService: ObservableObject {
 
     /// Load statistics about total and processed entries
     func loadStats() {
-        totalEntries = fileService.loadExistingEntries().count
+        let existingEntries = fileService.loadExistingEntries()
+        totalEntries = existingEntries.count
 
         do {
             try dbService.initialize()
 
-            // Count unique entry IDs that have embeddings
+            // Count unique entry IDs that have embeddings AND still exist in filesystem
             let allChunks = try chunkRepo.getAllChunks()
             let uniqueEntryIds = Set(allChunks.map { $0.entryId })
-            processedEntries = uniqueEntryIds.count
+            let existingEntryIds = Set(existingEntries.map { $0.id })
+            
+            // Only count entries that exist in both database and filesystem
+            processedEntries = uniqueEntryIds.intersection(existingEntryIds).count
         } catch {
             print("⚠️ Failed to load embeddings stats: \(error)")
             processedEntries = 0
@@ -120,9 +124,6 @@ class EmbeddingProcessingService: ObservableObject {
                         try chunkRepo.saveBatch(chunksWithEmbeddings)
                         print("✅ Processed entry \(index + 1)/\(entriesToProcess.count): \(chunksWithEmbeddings.count) chunks")
                     }
-
-                    // Update processed count
-                    processedEntries += 1
                 }
 
                 print("✅ Processing complete! Processed \(entriesToProcess.count) entries")
@@ -138,6 +139,52 @@ class EmbeddingProcessingService: ObservableObject {
     func cancelProcessing() {
         processingTask?.cancel()
         processingTask = nil
+    }
+
+    /// Clean up orphaned entries (entries in database but not in filesystem)
+    /// Attempts to recover entries first before deleting
+    func cleanupOrphanedEntries() {
+        do {
+            try dbService.initialize()
+            
+            let existingEntries = fileService.loadExistingEntries()
+            let existingIds = Set(existingEntries.map { $0.id })
+            
+            let allChunks = try chunkRepo.getAllChunks()
+            let dbEntryIds = Set(allChunks.map { $0.entryId })
+            
+            let orphanedIds = dbEntryIds.subtracting(existingIds)
+            
+            if !orphanedIds.isEmpty {
+                print("🔍 Found \(orphanedIds.count) orphaned entries in database")
+                
+                // Try to recover entries first
+                let recoveryService = EntryRecoveryService(
+                    fileService: fileService,
+                    chunkRepo: chunkRepo,
+                    dbService: dbService
+                )
+                
+                var recoveredCount = 0
+                for orphanedId in orphanedIds {
+                    if recoveryService.recoverEntry(entryId: orphanedId) {
+                        recoveredCount += 1
+                    } else {
+                        // If recovery fails, clean up the orphaned embeddings
+                        try? chunkRepo.deleteChunks(forEntryId: orphanedId)
+                        print("🗑️ Removed embeddings for unrecoverable entry: \(orphanedId)")
+                    }
+                }
+                
+                if recoveredCount > 0 {
+                    print("✅ Recovered \(recoveredCount) deleted entries!")
+                }
+            }
+            
+            loadStats() // Refresh counts
+        } catch {
+            print("⚠️ Failed to cleanup orphaned entries: \(error)")
+        }
     }
 
     // MARK: - Private Helpers
@@ -207,6 +254,13 @@ class EmbeddingProcessingService: ObservableObject {
            let closingBracket = filename.range(of: "].md") {
             let startIndex = filename.index(secondBracketStart.upperBound, offsetBy: 0)
             let endIndex = closingBracket.lowerBound
+
+            // Validate that startIndex <= endIndex to prevent range crash
+            guard startIndex <= endIndex else {
+                print("⚠️ Invalid filename format for date parsing: \(filename)")
+                return Date()
+            }
+
             let dateString = String(filename[startIndex..<endIndex])
 
             let formatter = DateFormatter()

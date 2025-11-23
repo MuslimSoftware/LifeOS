@@ -1,6 +1,10 @@
 
 import Foundation
 
+extension Notification.Name {
+    static let entriesDidConsolidate = Notification.Name("entriesDidConsolidate")
+}
+
 @Observable
 class FileManagerService {
     private let fileManager = FileManager.default
@@ -123,12 +127,30 @@ class FileManagerService {
     }
     
     private func stripMetadata(from content: String) -> String {
-        if content.hasPrefix("---\n") {
-            let components = content.components(separatedBy: "---\n")
-            if components.count >= 3 {
-                return components.dropFirst(2).joined(separator: "---\n")
+        // Use regex to match and remove YAML front matter metadata block
+        // Pattern matches: optional whitespace, ---, content, ---, optional whitespace
+        let pattern = #"^\s*---\s*\n.*?\n---\s*\n"#
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else {
+            // If regex creation fails, fall back to original logic
+            if content.hasPrefix("---\n") {
+                let components = content.components(separatedBy: "---\n")
+                if components.count >= 3 {
+                    return components.dropFirst(2).joined(separator: "---\n")
+                }
             }
+            return content
         }
+
+        let nsString = content as NSString
+        let range = NSRange(location: 0, length: nsString.length)
+
+        if let match = regex.firstMatch(in: content, options: [], range: range) {
+            let matchRange = match.range
+            let afterMetadata = nsString.substring(from: matchRange.location + matchRange.length)
+            return afterMetadata
+        }
+
         return content
     }
     
@@ -302,24 +324,50 @@ class FileManagerService {
         
         let startIndex = todoRange.upperBound  // Skip the "## TODOs\n" header
         let endIndex: String.Index
-        
+
         if let journalRange = withoutMetadata.range(of: "## Journal") {
             endIndex = journalRange.lowerBound
         } else {
             endIndex = withoutMetadata.endIndex
         }
-        
+
+        // Validate range before creating substring to prevent crash
+        guard startIndex <= endIndex else {
+            print("⚠️ Invalid TODO section order in file")
+            return ""
+        }
+
         return String(withoutMetadata[startIndex..<endIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     private func extractJournalSection(from content: String) -> String {
         let withoutMetadata = stripMetadata(from: content)
 
-        guard let journalRange = withoutMetadata.range(of: "## Journal\n") else {
-            return withoutMetadata.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Try to find journal section with different patterns
+        var journalRange: Range<String.Index>?
+
+        // Try "## Journal\n" first (most common)
+        journalRange = withoutMetadata.range(of: "## Journal\n")
+
+        // If not found, try "## Journal" without newline (end of file case)
+        if journalRange == nil {
+            journalRange = withoutMetadata.range(of: "## Journal")
         }
 
-        let journalContent = String(withoutMetadata[journalRange.upperBound...])
+        guard let range = journalRange else {
+            // No journal section found - return empty instead of full content
+            return ""
+        }
+
+        // Validate that upperBound is within valid range
+        guard range.upperBound <= withoutMetadata.endIndex else {
+            print("⚠️ Invalid Journal section position in file")
+            return ""
+        }
+
+        // Extract everything after the "## Journal" header
+        let startIndex = range.upperBound
+        let journalContent = String(withoutMetadata[startIndex...])
         return journalContent.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -339,6 +387,12 @@ class FileManagerService {
             endIndex = journalRange.lowerBound
         } else {
             endIndex = withoutMetadata.endIndex
+        }
+
+        // Validate range before creating substring to prevent crash
+        guard startIndex <= endIndex else {
+            print("⚠️ Invalid Notes section order in file")
+            return ""
         }
 
         return String(withoutMetadata[startIndex..<endIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -525,13 +579,13 @@ class FileManagerService {
             }
         }
 
-        // Prioritize file with journal content as primary, otherwise use first file
-        let primaryFile: (url: URL, content: String)
-        if let fileWithJournal = files.first(where: { !extractJournalSection(from: $0.content).isEmpty }) {
-            primaryFile = fileWithJournal
-        } else {
-            primaryFile = files[0]
+        // Sort files by timestamp and pick the earliest one as primary
+        let sortedFiles = files.sorted { file1, file2 in
+            let timestamp1 = extractTimestamp(from: file1.url.lastPathComponent)
+            let timestamp2 = extractTimestamp(from: file2.url.lastPathComponent)
+            return timestamp1 < timestamp2
         }
+        let primaryFile = sortedFiles[0]
 
         // Deduplicate sticky notes before joining
         var uniqueNotes: [String] = []
@@ -586,8 +640,16 @@ class FileManagerService {
             try encryptedData.write(to: primaryFile.url, options: .atomic)
             print("✅ Consolidated to \(primaryFile.url.lastPathComponent)")
             
-            // Delete duplicate files
-            for (url, _) in files.dropFirst() {
+            // Delete duplicate files AND their embeddings (skip the first/primary file)
+            let chunkRepo = ChunkRepository()
+            for (url, _) in sortedFiles.dropFirst() {
+                // Extract UUID from filename and clean up DB
+                let filename = url.lastPathComponent
+                if let uuidMatch = filename.range(of: "\\[(.*?)\\]", options: .regularExpression),
+                   let uuid = UUID(uuidString: String(filename[uuidMatch].dropFirst().dropLast())) {
+                    try? chunkRepo.deleteChunks(forEntryId: uuid)
+                }
+                
                 try? fileManager.removeItem(at: url)
                 print("🗑️ Deleted duplicate: \(url.lastPathComponent)")
             }
@@ -596,12 +658,21 @@ class FileManagerService {
             let filename = primaryFile.url.lastPathComponent
             if let uuidMatch = filename.range(of: "\\[(.*?)\\]", options: .regularExpression),
                let uuid = UUID(uuidString: String(filename[uuidMatch].dropFirst().dropLast())) {
-                
+
+                // Generate preview text from consolidated journal content
+                let preview = journalContent
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let previewText = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
+
+                // Notify that entries have been consolidated so UI can refresh
+                NotificationCenter.default.post(name: .entriesDidConsolidate, object: nil)
+
                 return HumanEntry(
                     id: uuid,
                     date: date,
                     filename: filename,
-                    previewText: "",
+                    previewText: previewText,
                     year: year
                 )
             }
@@ -610,6 +681,19 @@ class FileManagerService {
         }
         
         return nil
+    }
+    
+    private func extractTimestamp(from filename: String) -> Date {
+        // Extract from: [UUID]-[2025-11-19-00-57-37].md
+        if let range = filename.range(of: "\\[\\d{4}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2}\\]", options: .regularExpression) {
+            let timestampStr = String(filename[range]).dropFirst().dropLast()
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
+            if let date = formatter.date(from: String(timestampStr)) {
+                return date
+            }
+        }
+        return Date.distantPast
     }
     
     private func parseTODOs(from todoSection: String) -> [TODOItem] {

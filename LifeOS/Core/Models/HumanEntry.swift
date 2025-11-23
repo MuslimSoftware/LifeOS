@@ -36,7 +36,7 @@ struct HumanEntry: Identifiable {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
         dateFormatter.timeZone = TimeZone.current
-        let timestampString = dateFormatter.string(from: Date())
+        let timestampString = dateFormatter.string(from: date)
         
         dateFormatter.dateFormat = "MMM d"
         let displayDate = dateFormatter.string(from: date)

@@ -16,7 +16,11 @@ struct ContentView: View {
     @State private var databaseService: DatabaseService?
     @State private var agentKernel: AgentKernel?
 
-    // Authentication 
+    // Add dot for sticky notes in calendar
+    // Fix system prompt to stop being so wierd
+    // Change timer to just focus toggle
+    
+    // Authentication
     @State private var authManager = AuthenticationManager.shared
     @State private var hasCheckedAuth = false
 

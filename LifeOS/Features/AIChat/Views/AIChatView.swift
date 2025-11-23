@@ -103,7 +103,7 @@ struct AIChatView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: hoverManager.isRightSidebarOpen(for: .aiChat))
         .onAppear {
-            embeddingService.loadStats()
+            embeddingService.cleanupOrphanedEntries()
         }
         .alert("Delete Conversation", isPresented: Binding(
             get: { conversationToDelete != nil },
