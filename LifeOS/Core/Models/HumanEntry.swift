@@ -13,15 +13,16 @@ struct HumanEntry: Identifiable {
         let now = Date()
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-        dateFormatter.timeZone = TimeZone.current
+        dateFormatter.timeZone = TimeZone(identifier: "UTC")
         let dateString = dateFormatter.string(from: now)
-        
+
         dateFormatter.dateFormat = "MMM d"
+        dateFormatter.timeZone = TimeZone.current
         let displayDate = dateFormatter.string(from: now)
-        
+
         let calendar = Calendar.current
         let year = calendar.component(.year, from: now)
-        
+
         return HumanEntry(
             id: id,
             date: displayDate,
@@ -35,15 +36,16 @@ struct HumanEntry: Identifiable {
         let id = UUID()
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-        dateFormatter.timeZone = TimeZone.current
+        dateFormatter.timeZone = TimeZone(identifier: "UTC")
         let timestampString = dateFormatter.string(from: date)
-        
+
         dateFormatter.dateFormat = "MMM d"
+        dateFormatter.timeZone = TimeZone.current
         let displayDate = dateFormatter.string(from: date)
-        
+
         let calendar = Calendar.current
         let year = calendar.component(.year, from: date)
-        
+
         return HumanEntry(
             id: id,
             date: displayDate,

@@ -7,52 +7,6 @@
 
 import SwiftUI
 
-/// Shimmer effect modifier for loading states
-struct ShimmerEffect: ViewModifier {
-    @State private var phase: CGFloat = 0
-    let isActive: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .overlay(
-                GeometryReader { geometry in
-                    if isActive {
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.white.opacity(0),
-                                Color.white.opacity(0.3),
-                                Color.white.opacity(0.6),
-                                Color.white.opacity(0.3),
-                                Color.white.opacity(0)
-                            ]),
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: geometry.size.width * 0.3)
-                        .offset(x: geometry.size.width * phase - geometry.size.width * 0.3)
-                        .blendMode(.overlay)
-                        .allowsHitTesting(false)
-                        .onAppear {
-                            withAnimation(
-                                Animation.linear(duration: 1.5)
-                                    .repeatForever(autoreverses: false)
-                            ) {
-                                phase = 1.3
-                            }
-                        }
-                    }
-                }
-            )
-            .clipped()
-    }
-}
-
-extension View {
-    func shimmer(isActive: Bool) -> some View {
-        modifier(ShimmerEffect(isActive: isActive))
-    }
-}
-
 /// Bottom bar showing embedding processing progress
 struct ChatBottomBarView: View {
     @Environment(\.theme) private var theme
@@ -83,6 +37,13 @@ struct ChatBottomBarView: View {
 
             // Progress info
             HStack(spacing: 8) {
+                // Loading indicator
+                if embeddingService.isProcessing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.8)
+                }
+
                 // Progress bar
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
@@ -107,7 +68,6 @@ struct ChatBottomBarView: View {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(Color.clear)
             )
-            .shimmer(isActive: embeddingService.isProcessing)
             .contentShape(Rectangle())
             .onTapGesture {
                 if !isComplete {

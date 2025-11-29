@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 enum SettingsSection: String, CaseIterable {
     case appearance = "Appearance"
@@ -22,12 +23,14 @@ struct SettingsView: View {
     @State private var selectedSection: SettingsSection = .appearance
     @State private var hoveredSection: SettingsSection?
     // @State private var showProcessingSheet: Bool = false  // REMOVED: analytics
+    private let embeddingService = EmbeddingProcessingService.shared
     @State private var isProcessing: Bool = false
-    @State private var totalEntries: Int = 0
-    @State private var entriesWithEmbeddings: Int = 0
+    @State private var currentProgress: Int = 0
+    @State private var totalToProcess: Int = 0
     @State private var dbSize: String = "0"
     @State private var lastProcessedDate: Date?
     @State private var showClearConfirmation: Bool = false
+    @State private var showEntryInspector: Bool = false
     // @State private var autoProcessingEnabled: Bool = false  // REMOVED: analytics
     @State private var maxTokensPerRequest: Int = {
         let stored = UserDefaults.standard.integer(forKey: TokenBudgetManager.maxTokensKey)
@@ -674,7 +677,7 @@ struct SettingsView: View {
                         .font(.system(size: 12))
                         .foregroundColor(theme.secondaryText)
                     Spacer()
-                    Text("\(totalEntries)")
+                    Text("\(embeddingService.totalEntries)")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(theme.primaryText)
                 }
@@ -684,7 +687,7 @@ struct SettingsView: View {
                         .font(.system(size: 12))
                         .foregroundColor(theme.secondaryText)
                     Spacer()
-                    Text(entriesWithEmbeddings > 0 ? "\(entriesWithEmbeddings) (\(embeddingsPercentage)%)" : "\(entriesWithEmbeddings)")
+                    Text(embeddingService.processedEntries > 0 ? "\(embeddingService.processedEntries) (\(embeddingsPercentage)%)" : "\(embeddingService.processedEntries)")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(theme.primaryText)
                 }
@@ -703,8 +706,54 @@ struct SettingsView: View {
             .background(theme.hoveredBackground)
             .cornerRadius(8)
 
+            // Processing Progress
+            if isProcessing {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Processing Entries...")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(theme.primaryText)
+
+                        Spacer()
+
+                        Text("\(currentProgress)/\(totalToProcess)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(theme.secondaryText)
+                    }
+
+                    ProgressView(value: Double(currentProgress), total: Double(totalToProcess))
+                        .progressViewStyle(.linear)
+                        .tint(theme.accentColor)
+                }
+                .padding(12)
+                .background(theme.accentColor.opacity(0.1))
+                .cornerRadius(8)
+            }
+
             // Actions
             VStack(alignment: .leading, spacing: 12) {
+                Button("Inspect Entry Files (Debug)") {
+                    showEntryInspector = true
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(theme.accentColor)
+                .cornerRadius(6)
+
+                Button("Consolidate Duplicate Files") {
+                    consolidateDuplicates()
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(theme.accentColor)
+                .cornerRadius(6)
+
                 Button("Process All Entries") {
                     processAllEntries()
                 }
@@ -734,6 +783,14 @@ struct SettingsView: View {
         .padding(24)
         .onAppear {
             loadEmbeddingsStats()
+        }
+        .onReceive(embeddingService.objectWillChange) { _ in
+            isProcessing = embeddingService.isProcessing
+            currentProgress = embeddingService.currentEntryIndex
+            totalToProcess = embeddingService.totalEntries
+        }
+        .sheet(isPresented: $showEntryInspector) {
+            EntryInspectorView()
         }
         .alert("Clear Embeddings Database?", isPresented: $showClearConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -1015,16 +1072,13 @@ struct SettingsView: View {
     // MARK: - Embeddings Helpers
 
     private var embeddingsPercentage: Int {
-        guard totalEntries > 0 else { return 0 }
-        return Int((Double(entriesWithEmbeddings) / Double(totalEntries)) * 100)
+        guard embeddingService.totalEntries > 0 else { return 0 }
+        return Int((Double(embeddingService.processedEntries) / Double(embeddingService.totalEntries)) * 100)
     }
 
     private func loadEmbeddingsStats() {
-        let embeddingService = EmbeddingProcessingService.shared
+        // Load stats from service (updates totalEntries, processedEntries)
         embeddingService.loadStats()
-
-        totalEntries = embeddingService.totalEntries
-        entriesWithEmbeddings = embeddingService.processedEntries
 
         // Calculate database size
         do {
@@ -1042,17 +1096,14 @@ struct SettingsView: View {
     }
 
     private func processAllEntries() {
+        // Start processing - .onReceive will update UI in real-time
+        embeddingService.processAllEntries()
+
+        // Refresh stats after processing completes
         Task { @MainActor in
-            let embeddingService = EmbeddingProcessingService.shared
-            embeddingService.processAllEntries()
-
-            // Observe processing state
             while embeddingService.isProcessing {
-                isProcessing = true
-                try? await Task.sleep(nanoseconds: 500_000_000) // Poll every 0.5s
+                try? await Task.sleep(nanoseconds: 500_000_000)
             }
-
-            isProcessing = false
             loadEmbeddingsStats()
         }
     }
@@ -1069,6 +1120,19 @@ struct SettingsView: View {
             loadEmbeddingsStats()
         } catch {
             print("⚠️ Failed to clear embeddings: \(error)")
+        }
+    }
+
+    private func consolidateDuplicates() {
+        Task { @MainActor in
+            print("🔄 Starting duplicate file consolidation...")
+            let (datesConsolidated, filesDeleted) = fileService.consolidateAllDuplicates()
+            print("✨ Consolidation complete!")
+            print("   - Dates consolidated: \(datesConsolidated)")
+            print("   - Files deleted: \(filesDeleted)")
+
+            // Refresh stats after consolidation
+            loadEmbeddingsStats()
         }
     }
 }

@@ -149,17 +149,43 @@ class RetrieveTool: AgentTool {
             return RetrieveResult.empty(reason: "No chunks found matching filters")
         }
 
-        // 4. Determine ranking weights
+        // 4. For pure date sorting, bypass hybrid ranking
+        if query.sort == .dateDesc || query.sort == .dateAsc {
+            // Sort chunks directly by date
+            let sorted = candidates.sorted { chunk1, chunk2 in
+                if query.sort == .dateDesc {
+                    return chunk1.date > chunk2.date
+                } else {
+                    return chunk1.date < chunk2.date
+                }
+            }
+
+            // Apply limit
+            let limited = Array(sorted.prefix(query.limit))
+
+            // Convert to RankedItem with date-based scores
+            let rankedItems = limited.enumerated().map { index, chunk in
+                // Score based on position (higher position = higher score for dateDesc)
+                let score = query.sort == .dateDesc ? Double(limited.count - index) : Double(index + 1)
+                var components = RankedItem.ScoreComponents()
+                components.recencyDecay = 1.0  // Pure date sort, no decay
+                return RankedItem.fromChunk(chunk, score: score, components: components)
+            }
+
+            return RetrieveResult.build(items: rankedItems)
+        }
+
+        // 5. For other sort modes, use hybrid ranking
         let weights = RankingWeights.forQuery(query)
         let customRanker = HybridRanker(openAI: openAI, bm25: bm25, weights: weights)
 
-        // 5. Rank with hybrid scorer
+        // 6. Rank with hybrid scorer
         let rankedItems = try await customRanker.rankChunks(candidates, query: query)
 
-        // 6. Filter by minimum similarity if specified
+        // 7. Filter by minimum similarity if specified
         let filtered = filterBySimilarity(items: rankedItems, query: query)
 
-        // 7. Build result with metadata
+        // 8. Build result with metadata
         return RetrieveResult.build(items: filtered)
     }
 

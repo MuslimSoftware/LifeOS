@@ -53,11 +53,15 @@ class EmbeddingProcessingService: ObservableObject {
     /// Process all unprocessed journal entries
     func processAllEntries() {
         processingTask = Task { @MainActor in
-            isProcessing = true
-            currentEntryIndex = 0
+            print("🔄 Setting isProcessing = true")
+            self.isProcessing = true
+            self.currentEntryIndex = 0
+            self.objectWillChange.send()
             defer {
-                isProcessing = false
-                currentEntryIndex = 0
+                print("🔄 Setting isProcessing = false")
+                self.isProcessing = false
+                self.currentEntryIndex = 0
+                self.objectWillChange.send()
             }
 
             do {
@@ -84,16 +88,20 @@ class EmbeddingProcessingService: ObservableObject {
                         break
                     }
 
-                    currentEntryIndex = index + 1
+                    self.currentEntryIndex = index + 1
+                    print("📈 Progress: \(self.currentEntryIndex)/\(entriesToProcess.count)")
+                    self.objectWillChange.send()
 
-                    // Load entry content
+                    // Load entry content (loadEntry already extracts journal section only)
                     guard let content = fileService.loadEntry(entry) else {
                         print("⚠️ Failed to load content for entry: \(entry.id)")
                         continue
                     }
 
-                    // Skip empty entries
+                    // Skip entries with empty journal section
+                    // This matches the filtering logic in loadExistingEntries()
                     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                        print("⚠️ Skipping entry with empty journal section: \(entry.id)")
                         continue
                     }
 
@@ -123,6 +131,8 @@ class EmbeddingProcessingService: ObservableObject {
                     if !chunksWithEmbeddings.isEmpty {
                         try chunkRepo.saveBatch(chunksWithEmbeddings)
                         print("✅ Processed entry \(index + 1)/\(entriesToProcess.count): \(chunksWithEmbeddings.count) chunks")
+                        processedEntries += 1
+                        self.objectWillChange.send()
                     }
                 }
 
@@ -143,28 +153,30 @@ class EmbeddingProcessingService: ObservableObject {
 
     /// Clean up orphaned entries (entries in database but not in filesystem)
     /// Attempts to recover entries first before deleting
+    /// Also cleans up chunks for entries with empty journal sections
     func cleanupOrphanedEntries() {
         do {
             try dbService.initialize()
-            
+
             let existingEntries = fileService.loadExistingEntries()
             let existingIds = Set(existingEntries.map { $0.id })
-            
+
             let allChunks = try chunkRepo.getAllChunks()
             let dbEntryIds = Set(allChunks.map { $0.entryId })
-            
+
             let orphanedIds = dbEntryIds.subtracting(existingIds)
-            
+
+            // Phase 1: Clean up orphaned entries (deleted files)
             if !orphanedIds.isEmpty {
                 print("🔍 Found \(orphanedIds.count) orphaned entries in database")
-                
+
                 // Try to recover entries first
                 let recoveryService = EntryRecoveryService(
                     fileService: fileService,
                     chunkRepo: chunkRepo,
                     dbService: dbService
                 )
-                
+
                 var recoveredCount = 0
                 for orphanedId in orphanedIds {
                     if recoveryService.recoverEntry(entryId: orphanedId) {
@@ -175,12 +187,21 @@ class EmbeddingProcessingService: ObservableObject {
                         print("🗑️ Removed embeddings for unrecoverable entry: \(orphanedId)")
                     }
                 }
-                
+
                 if recoveredCount > 0 {
                     print("✅ Recovered \(recoveredCount) deleted entries!")
                 }
             }
-            
+
+            // Phase 2: Clean up chunks for entries with empty journal sections
+            // loadExistingEntries() only returns entries with non-empty journal sections
+            // So we can use existingIds as the set of valid entry IDs
+            print("🔍 Checking for chunks from entries with empty journal sections...")
+            let emptyJournalCleanupCount = try chunkRepo.deleteChunksForEmptyJournalEntries(validEntryIds: existingIds)
+            if emptyJournalCleanupCount > 0 {
+                print("✅ Cleaned up \(emptyJournalCleanupCount) entries with empty journal sections")
+            }
+
             loadStats() // Refresh counts
         } catch {
             print("⚠️ Failed to cleanup orphaned entries: \(error)")
@@ -258,6 +279,7 @@ class EmbeddingProcessingService: ObservableObject {
             // Validate that startIndex <= endIndex to prevent range crash
             guard startIndex <= endIndex else {
                 print("⚠️ Invalid filename format for date parsing: \(filename)")
+                print("⚠️ Falling back to current date for entry: \(entry.id)")
                 return Date()
             }
 
@@ -265,10 +287,16 @@ class EmbeddingProcessingService: ObservableObject {
 
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-            formatter.timeZone = TimeZone.current
+            formatter.timeZone = TimeZone(identifier: "UTC")
             if let date = formatter.date(from: dateString) {
                 return date
+            } else {
+                print("⚠️ Failed to parse date string '\(dateString)' from filename: \(filename)")
+                print("⚠️ Falling back to current date for entry: \(entry.id)")
             }
+        } else {
+            print("⚠️ Could not find date brackets in filename: \(filename)")
+            print("⚠️ Falling back to current date for entry: \(entry.id)")
         }
 
         // Fallback to current date

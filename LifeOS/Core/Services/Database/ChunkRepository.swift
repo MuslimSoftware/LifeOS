@@ -125,12 +125,54 @@ class ChunkRepository {
 
     /// Delete all chunks from the database
     func deleteAll() throws {
-        try dbService.getQueue().write { db in
+        let queue = try dbService.getQueue()
+
+        // Delete operations inside transaction
+        try queue.write { db in
             try db.execute(sql: "DELETE FROM chunks")
             try db.execute(sql: "DELETE FROM chunks_fts")
-            // Reclaim disk space by compacting the database
+        }
+
+        // VACUUM must run outside transaction
+        try queue.inDatabase { db in
             try db.execute(sql: "VACUUM")
         }
+
+        print("✅ Successfully cleared all embeddings and compacted database")
+    }
+
+    /// Clean up chunks for entries with empty journal sections
+    /// Returns the number of entry IDs that had chunks deleted
+    func deleteChunksForEmptyJournalEntries(validEntryIds: Set<UUID>) throws -> Int {
+        // Get all unique entry IDs in the database
+        let allChunks = try getAllChunks()
+        let dbEntryIds = Set(allChunks.map { $0.entryId })
+
+        // Find entry IDs in DB that are not in the valid entries list
+        // These are entries that either don't exist or have empty journal sections
+        let emptyJournalEntryIds = dbEntryIds.subtracting(validEntryIds)
+
+        if emptyJournalEntryIds.isEmpty {
+            print("✅ No chunks found for empty journal entries")
+            return 0
+        }
+
+        print("🗑️ Found \(emptyJournalEntryIds.count) entries with empty journal sections in database")
+
+        // Delete chunks for each empty journal entry
+        var deletedCount = 0
+        for entryId in emptyJournalEntryIds {
+            do {
+                try deleteChunks(forEntryId: entryId)
+                deletedCount += 1
+                print("   Deleted chunks for entry: \(entryId)")
+            } catch {
+                print("   ⚠️ Failed to delete chunks for entry \(entryId): \(error)")
+            }
+        }
+
+        print("✅ Cleaned up chunks for \(deletedCount) entries with empty journal sections")
+        return deletedCount
     }
 
     // MARK: - Private Helpers

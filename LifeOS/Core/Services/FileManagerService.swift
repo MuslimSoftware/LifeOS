@@ -100,7 +100,7 @@ class FileManagerService {
         return extractJournalSection(from: content)
     }
 
-    private func loadRawContent(from fileURL: URL) -> String? {
+    func loadRawContent(from fileURL: URL) -> String? {
         guard fileManager.fileExists(atPath: fileURL.path) else {
             return nil
         }
@@ -212,7 +212,12 @@ class FileManagerService {
                 }
 
                 guard let content = loadRawContent(from: fileURL) else {
-                    print("Error reading file: \(filename)")
+                    print("⚠️ Error reading file: \(filename)")
+                    print("   → Could not decrypt or load content")
+                    if let attrs = try? fileManager.attributesOfItem(atPath: fileURL.path),
+                       let size = attrs[.size] as? Int64 {
+                        print("   → File size: \(size) bytes")
+                    }
                     return nil
                 }
 
@@ -236,6 +241,8 @@ class FileManagerService {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
                 guard !preview.isEmpty else {
+                    print("⚠️ Skipping file with empty journal section: \(filename)")
+                    print("   → Display date would be: \(displayDate) \(year)")
                     return nil
                 }
 
@@ -340,7 +347,7 @@ class FileManagerService {
         return String(withoutMetadata[startIndex..<endIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
-    private func extractJournalSection(from content: String) -> String {
+    func extractJournalSection(from content: String) -> String {
         let withoutMetadata = stripMetadata(from: content)
 
         // Try to find journal section with different patterns
@@ -637,11 +644,21 @@ class FileManagerService {
         }
         
         do {
+            let chunkRepo = ChunkRepository()
+
+            // Delete primary file's old embeddings BEFORE updating content
+            // This ensures embeddings will match the new consolidated content
+            let primaryFilename = primaryFile.url.lastPathComponent
+            if let uuidMatch = primaryFilename.range(of: "\\[(.*?)\\]", options: .regularExpression),
+               let primaryUuid = UUID(uuidString: String(primaryFilename[uuidMatch].dropFirst().dropLast())) {
+                try? chunkRepo.deleteChunks(forEntryId: primaryUuid)
+                print("🗑️ Deleted old embeddings for primary file: \(primaryFilename)")
+            }
+
             try encryptedData.write(to: primaryFile.url, options: .atomic)
             print("✅ Consolidated to \(primaryFile.url.lastPathComponent)")
-            
+
             // Delete duplicate files AND their embeddings (skip the first/primary file)
-            let chunkRepo = ChunkRepository()
             for (url, _) in sortedFiles.dropFirst() {
                 // Extract UUID from filename and clean up DB
                 let filename = url.lastPathComponent
@@ -990,5 +1007,272 @@ class FileManagerService {
         } catch {
             print("❌ Failed to save sticky note: \(error)")
         }
+    }
+
+    /// Consolidate all duplicate files in the documents directory
+    /// Returns: (datesConsolidated, filesDeleted)
+    func consolidateAllDuplicates() -> (datesConsolidated: Int, filesDeleted: Int) {
+        print("🔄 Starting batch consolidation of all duplicate files...")
+
+        var datesConsolidated = 0
+        var filesDeleted = 0
+
+        do {
+            // Load all .md files
+            let fileURLs = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
+            let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
+
+            print("📁 Found \(mdFiles.count) total files")
+
+            // Group files by (date, year) from their metadata
+            var filesByDate: [String: [(url: URL, content: String)]] = [:]
+
+            for fileURL in mdFiles {
+                guard let content = loadRawContent(from: fileURL) else {
+                    print("⚠️ Could not load content from: \(fileURL.lastPathComponent)")
+                    continue
+                }
+
+                // Extract metadata
+                var date: String
+                var year: Int
+
+                if let metadata = parseMetadata(from: content) {
+                    date = metadata.date
+                    year = metadata.year
+                } else {
+                    // Fallback: parse from filename timestamp
+                    let filename = fileURL.lastPathComponent
+                    guard let dateMatch = filename.range(of: "\\[(\\d{4}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2})\\]", options: .regularExpression) else {
+                        print("⚠️ Could not extract date from filename: \(filename)")
+                        continue
+                    }
+
+                    let dateString = String(filename[dateMatch].dropFirst().dropLast())
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
+
+                    guard let fileDate = dateFormatter.date(from: dateString) else {
+                        print("⚠️ Could not parse date from: \(dateString)")
+                        continue
+                    }
+
+                    dateFormatter.dateFormat = "MMM d"
+                    date = dateFormatter.string(from: fileDate)
+
+                    let calendar = Calendar.current
+                    year = calendar.component(.year, from: fileDate)
+                }
+
+                // Create unique key for grouping
+                let dateKey = "\(date)-\(year)"
+
+                if filesByDate[dateKey] == nil {
+                    filesByDate[dateKey] = []
+                }
+                filesByDate[dateKey]?.append((url: fileURL, content: content))
+            }
+
+            // Find dates with duplicates
+            let duplicateDates = filesByDate.filter { $0.value.count > 1 }
+            print("📊 Found \(duplicateDates.count) dates with duplicate files")
+
+            // Consolidate each date with duplicates
+            for (dateKey, files) in duplicateDates {
+                let components = dateKey.components(separatedBy: "-")
+                guard components.count >= 2,
+                      let year = Int(components.last!) else {
+                    print("⚠️ Invalid date key: \(dateKey)")
+                    continue
+                }
+
+                // Reconstruct date string (everything except the last component which is the year)
+                let date = components.dropLast().joined(separator: "-")
+
+                let fileCount = files.count
+                print("\n🔨 Consolidating \(fileCount) files for \(date) \(year)...")
+
+                // Count files before consolidation
+                let filesBefore = files.count
+
+                // Perform consolidation with validation
+                if let consolidatedEntry = consolidateFilesWithValidation(files, date: date, year: year) {
+                    datesConsolidated += 1
+                    // Files deleted = original count - 1 (keeping primary)
+                    let deleted = filesBefore - 1
+                    filesDeleted += deleted
+                    print("✅ Successfully consolidated \(date) \(year): kept \(consolidatedEntry.filename), deleted \(deleted) duplicates")
+                } else {
+                    print("❌ Failed to consolidate \(date) \(year)")
+                }
+            }
+
+            print("\n✨ Batch consolidation complete!")
+            print("📈 Statistics:")
+            print("   - Dates consolidated: \(datesConsolidated)")
+            print("   - Files deleted: \(filesDeleted)")
+            print("   - Files remaining: \(mdFiles.count - filesDeleted)")
+
+        } catch {
+            print("❌ Error during batch consolidation: \(error)")
+        }
+
+        return (datesConsolidated, filesDeleted)
+    }
+
+    /// Consolidate files with validation - verifies write succeeded before deleting duplicates
+    private func consolidateFilesWithValidation(_ files: [(url: URL, content: String)], date: String, year: Int) -> HumanEntry? {
+        var allNotes: [String] = []
+        var allTODOs: [TODOItem] = []
+        var allJournals: [String] = []
+
+        // Extract content from all files
+        for (_, content) in files {
+            let notes = extractStickyNoteSection(from: content)
+            if !notes.isEmpty {
+                allNotes.append(notes)
+            }
+
+            let todos = parseTODOs(from: extractTODOSection(from: content))
+            allTODOs.append(contentsOf: todos)
+
+            let journal = extractJournalSection(from: content)
+            if !journal.isEmpty {
+                allJournals.append(journal)
+            }
+        }
+
+        // Remove duplicates from TODOs using Set
+        var seenIDs = Set<UUID>()
+        var uniqueTODOs: [TODOItem] = []
+        for todo in allTODOs {
+            if !seenIDs.contains(todo.id) {
+                seenIDs.insert(todo.id)
+                uniqueTODOs.append(todo)
+            }
+        }
+
+        // Sort files by timestamp and pick the earliest one as primary
+        let sortedFiles = files.sorted { file1, file2 in
+            let timestamp1 = extractTimestamp(from: file1.url.lastPathComponent)
+            let timestamp2 = extractTimestamp(from: file2.url.lastPathComponent)
+            return timestamp1 < timestamp2
+        }
+        let primaryFile = sortedFiles[0]
+
+        // Deduplicate sticky notes before joining
+        var uniqueNotes: [String] = []
+        for note in allNotes {
+            if !uniqueNotes.contains(note) {
+                uniqueNotes.append(note)
+            }
+        }
+        let consolidatedNotes = uniqueNotes.joined(separator: "\n\n")
+
+        // Merge all journals with separators if there are multiple unique journals
+        var uniqueJournals: [String] = []
+        for journal in allJournals {
+            if !uniqueJournals.contains(journal) {
+                uniqueJournals.append(journal)
+            }
+        }
+        let journalContent = uniqueJournals.joined(separator: "\n\n---\n\n")
+
+        // Build consolidated content
+        let metadata = "---\ndate: \(date)\nyear: \(year)\n---\n"
+        var newContent = metadata
+
+        if !consolidatedNotes.isEmpty {
+            newContent += "## Notes\n\(consolidatedNotes)\n\n"
+        }
+
+        newContent += "## TODOs\n"
+        for todo in uniqueTODOs {
+            let checkbox = todo.completed ? "[x]" : "[ ]"
+            var line = "- \(checkbox) \(todo.text)"
+            if let dueTime = todo.dueTime {
+                let calendar = Calendar.current
+                let hour = calendar.component(.hour, from: dueTime)
+                let minute = calendar.component(.minute, from: dueTime)
+                let period = hour >= 12 ? "PM" : "AM"
+                let displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour)
+                line += " @\(displayHour):\(String(format: "%02d", minute)) \(period)"
+            }
+            newContent += "\(line)\n"
+        }
+
+        newContent += "\n## Journal\n\(journalContent)"
+
+        // Save consolidated content
+        guard let encryptionKey = KeychainService.shared.getOrCreateEncryptionKey(),
+              let encryptedData = EncryptionService.shared.encrypt(newContent, with: encryptionKey) else {
+            print("❌ Failed to encrypt consolidated content")
+            return nil
+        }
+
+        do {
+            let chunkRepo = ChunkRepository()
+
+            // Delete primary file's old embeddings BEFORE updating content
+            // This ensures embeddings will match the new consolidated content
+            let primaryFilename = primaryFile.url.lastPathComponent
+            if let uuidMatch = primaryFilename.range(of: "\\[(.*?)\\]", options: .regularExpression),
+               let primaryUuid = UUID(uuidString: String(primaryFilename[uuidMatch].dropFirst().dropLast())) {
+                try? chunkRepo.deleteChunks(forEntryId: primaryUuid)
+                print("🗑️ Deleted old embeddings for primary file: \(primaryFilename)")
+            }
+
+            // Write consolidated file
+            try encryptedData.write(to: primaryFile.url, options: .atomic)
+
+            // VALIDATION: Verify the file can be read back and decrypted
+            guard let verifyContent = loadRawContent(from: primaryFile.url),
+                  !verifyContent.isEmpty else {
+                print("❌ Validation failed: Could not read back consolidated file")
+                return nil
+            }
+
+            print("✅ Consolidated to \(primaryFile.url.lastPathComponent) and verified")
+
+            // Only delete duplicates if validation passed
+            for (url, _) in sortedFiles.dropFirst() {
+                // Extract UUID from filename and clean up DB
+                let filename = url.lastPathComponent
+                if let uuidMatch = filename.range(of: "\\[(.*?)\\]", options: .regularExpression),
+                   let uuid = UUID(uuidString: String(filename[uuidMatch].dropFirst().dropLast())) {
+                    try? chunkRepo.deleteChunks(forEntryId: uuid)
+                }
+
+                try? fileManager.removeItem(at: url)
+                print("🗑️  Deleted duplicate: \(url.lastPathComponent)")
+            }
+
+            // Extract UUID from primary file name and return consolidated entry
+            let filename = primaryFile.url.lastPathComponent
+            if let uuidMatch = filename.range(of: "\\[(.*?)\\]", options: .regularExpression),
+               let uuid = UUID(uuidString: String(filename[uuidMatch].dropFirst().dropLast())) {
+
+                // Generate preview text from consolidated journal content
+                let preview = journalContent
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let previewText = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
+
+                // Notify that entries have been consolidated so UI can refresh
+                NotificationCenter.default.post(name: .entriesDidConsolidate, object: nil)
+
+                return HumanEntry(
+                    id: uuid,
+                    date: date,
+                    filename: filename,
+                    previewText: previewText,
+                    year: year
+                )
+            }
+        } catch {
+            print("❌ Error consolidating files: \(error)")
+        }
+
+        return nil
     }
 }
