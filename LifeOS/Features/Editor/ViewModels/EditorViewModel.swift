@@ -16,7 +16,6 @@ class EditorViewModel {
     var edgeHintsOpacity: Double = 1.0
     var isHoveringBottomNav = false
     
-    private let fileService: FileManagerService
     let settings: AppSettings
     
     var lineHeight: CGFloat {
@@ -29,8 +28,7 @@ class EditorViewModel {
         return settings.fontSize / 2
     }
     
-    init(fileService: FileManagerService, settings: AppSettings) {
-        self.fileService = fileService
+    init(settings: AppSettings) {
         self.settings = settings
         self.placeholderText = AppConstants.placeholderOptions.randomElement() ?? "Begin writing"
     }

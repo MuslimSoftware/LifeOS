@@ -4,7 +4,6 @@ import AppKit
 struct ContentView: View {
     @Environment(AppSettings.self) private var settings
 
-    @State private var fileService = FileManagerService()
     @State private var pdfService = PDFExportService()
     @State private var editorViewModel: EditorViewModel?
     @State private var entryListViewModel: EntryListViewModel?
@@ -15,6 +14,13 @@ struct ContentView: View {
     // Analytics & AI services
     @State private var databaseService: DatabaseService?
     @State private var agentKernel: AgentKernel?
+
+    // Database repositories
+    private let dbService = DatabaseService.shared
+    private var entryRepo: EntryRepository { EntryRepository(dbService: dbService) }
+    private var todoRepo: TODORepository { TODORepository(dbService: dbService) }
+    private var stickyRepo: StickyNoteRepository { StickyNoteRepository(dbService: dbService) }
+    private var chunkRepository: ChunkRepository { ChunkRepository(dbService: dbService) }
 
     // Add dot for sticky notes in calendar
     // Fix system prompt to stop being so wierd
@@ -79,6 +85,9 @@ struct ContentView: View {
 
                                     guard !Task.isCancelled else { return }
 
+                                    let trimmedText = editorVM.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    guard trimmedText.count > 0 else { return }
+
                                     if let currentId = entryListVM.selectedEntryId {
                                         let currentEntry = entryListVM.entries.first(where: { $0.id == currentId }) ?? entryListVM.draftEntry
                                         if let currentEntry = currentEntry {
@@ -94,6 +103,20 @@ struct ContentView: View {
                     .animation(.easeInOut(duration: 0.2), value: hoverManager.isLeftSidebarOpen)
                 }
                 .onChange(of: selectedRoute) { _, newRoute in
+                    if let task = saveTask {
+                        task.cancel()
+
+                        let trimmedText = editorVM.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmedText.count > 0 {
+                            if let currentId = entryListVM.selectedEntryId {
+                                let currentEntry = entryListVM.entries.first(where: { $0.id == currentId }) ?? entryListVM.draftEntry
+                                if let currentEntry = currentEntry {
+                                    entryListVM.saveEntryWithoutPreviewUpdate(entry: currentEntry, content: editorVM.text)
+                                }
+                            }
+                        }
+                    }
+
                     hoverManager.currentRoute = newRoute
                 }
             } else {
@@ -109,6 +132,14 @@ struct ContentView: View {
             // Reinitialize services when API key is added/changed
             print("🔄 Auth changed, reinitializing AI services...")
             initializeAIServices()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .databaseDidReset)) { _ in
+            print("🔄 Database reset detected, reloading view models")
+            reloadDataFromDisk()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .dataImportCompleted)) { _ in
+            print("📥 Data import finished, refreshing UI state")
+            reloadDataFromDisk()
         }
         .onAppear {
             // Set up keyboard shortcut for sidebar pin toggle (⌘\)
@@ -129,11 +160,10 @@ struct ContentView: View {
     private var mainContent: some View {
         switch selectedRoute {
         case .calendar:
-            CalendarView(selectedRoute: $selectedRoute)
+            CalendarView(selectedRoute: $selectedRoute, stickyRepo: stickyRepo, entryRepo: entryRepo, todoRepo: todoRepo)
         case .journal:
             JournalPageView(
-                pdfService: pdfService,
-                fileService: fileService
+                pdfService: pdfService
             )
         case .aiChat:
             if !authManager.isAuthenticated {
@@ -172,10 +202,8 @@ struct ContentView: View {
     }
     
     private func initializeViewModels() {
-        fileService.migrateToEncryption()
-
-        let editorVM = EditorViewModel(fileService: fileService, settings: settings)
-        let entryListVM = EntryListViewModel(fileService: fileService)
+        let editorVM = EditorViewModel(settings: settings)
+        let entryListVM = EntryListViewModel(entryRepo: entryRepo, todoRepo: todoRepo, stickyRepo: stickyRepo, chunkRepository: chunkRepository)
 
         editorVM.isLoadingContent = true
         if let initialText = entryListVM.loadExistingEntries() {
@@ -226,6 +254,23 @@ struct ContentView: View {
             print("❌ Failed to initialize AI services: \(error.localizedDescription)")
             // Services remain nil, views will show appropriate empty/error states
         }
+    }
+
+    private func reloadDataFromDisk() {
+        saveTask?.cancel()
+        agentKernel = nil
+        databaseService = nil
+
+        editorViewModel = nil
+        entryListViewModel = nil
+
+        initializeViewModels()
+
+        if authManager.isAuthenticated {
+            initializeAIServices()
+        }
+
+        EmbeddingProcessingService.shared.loadStats()
     }
 }
 

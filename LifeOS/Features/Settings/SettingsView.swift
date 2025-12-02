@@ -1,11 +1,13 @@
 import SwiftUI
 import Combine
+import Observation
+import UniformTypeIdentifiers
 
 enum SettingsSection: String, CaseIterable {
     case appearance = "Appearance"
     case openai = "OpenAI API"
-    case backup = "Data Backup"
     case embeddings = "Embeddings"
+    case data = "Data"
 }
 
 struct SettingsView: View {
@@ -17,9 +19,6 @@ struct SettingsView: View {
     @State private var isKeyStored: Bool = false
     @State private var showSuccess: Bool = false
     @State private var errorMessage: String?
-    @State private var exportMessage: String?
-    @State private var importKeyText: String = ""
-    @State private var showImportField: Bool = false
     @State private var selectedSection: SettingsSection = .appearance
     @State private var hoveredSection: SettingsSection?
     // @State private var showProcessingSheet: Bool = false  // REMOVED: analytics
@@ -28,16 +27,18 @@ struct SettingsView: View {
     @State private var currentProgress: Int = 0
     @State private var totalToProcess: Int = 0
     @State private var dbSize: String = "0"
-    @State private var lastProcessedDate: Date?
     @State private var showClearConfirmation: Bool = false
-    @State private var showEntryInspector: Bool = false
     // @State private var autoProcessingEnabled: Bool = false  // REMOVED: analytics
     @State private var maxTokensPerRequest: Int = {
         let stored = UserDefaults.standard.integer(forKey: TokenBudgetManager.maxTokensKey)
         return stored > 0 ? stored : TokenBudgetManager.defaultMaxTokens
     }()
+    @State private var dataViewModel = DataManagementViewModel()
+    @State private var showDataResetConfirmation = false
+    @State private var showBackupImporter = false
+    private let zipType = UTType(filenameExtension: "zip") ?? .data
+    private let markdownType = UTType("net.daringfireball.markdown") ?? .plainText
 
-    private let fileService = FileManagerService()
     private let authManager = AuthenticationManager.shared
 
     var body: some View {
@@ -51,9 +52,26 @@ struct SettingsView: View {
         }
         .frame(width: 750, height: 650)
         .background(theme.backgroundColor)
+        .fileImporter(
+            isPresented: $showBackupImporter,
+            allowedContentTypes: [zipType, .folder, markdownType, .plainText],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    dataViewModel.importBackup(from: url)
+                }
+            case .failure(let error):
+                dataViewModel.errorMessage = error.localizedDescription
+            }
+        }
         .onAppear {
             // Use cached auth state instead of triggering another keychain access
             isKeyStored = authManager.isAuthenticated
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .databaseDidReset)) { _ in
+            loadEmbeddingsStats()
         }
     }
 
@@ -136,10 +154,10 @@ struct SettingsView: View {
                     appearanceSection
                 case .openai:
                     openAISection
-                case .backup:
-                    backupSection
                 case .embeddings:
                     embeddingsSection
+                case .data:
+                    dataSection
                 }
             }
         }
@@ -426,108 +444,6 @@ struct SettingsView: View {
         .padding(24)
     }
 
-    private var backupSection: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Data Backup & Recovery")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(theme.primaryText)
-
-                Text("Export your encryption key and journal entries for backup or migration to a new device.")
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    Button("Export Encryption Key") {
-                        exportEncryptionKey()
-                    }
-                    .buttonStyle(.plain)
-                    .focusable(false)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(theme.accentColor)
-                    .cornerRadius(6)
-
-                    Button("Export All Entries (Plaintext)") {
-                        exportAllEntries()
-                    }
-                    .buttonStyle(.plain)
-                    .focusable(false)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(theme.accentColor)
-                    .cornerRadius(6)
-                }
-
-                Button("Import Encryption Key") {
-                    showImportField = true
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .foregroundColor(theme.primaryText)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(theme.hoveredBackground)
-                .cornerRadius(6)
-
-                if showImportField {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Import Encryption Key")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(theme.primaryText)
-
-                        TextField("Paste encryption key here...", text: $importKeyText)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 11, design: .monospaced))
-
-                        HStack(spacing: 8) {
-                            Button("Import Key") {
-                                importEncryptionKey()
-                            }
-                            .buttonStyle(.plain)
-                            .focusable(false)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(importKeyText.isEmpty ? theme.dividerColor : theme.accentColor)
-                            .cornerRadius(4)
-                            .disabled(importKeyText.isEmpty)
-
-                            Button("Cancel") {
-                                showImportField = false
-                                importKeyText = ""
-                            }
-                            .buttonStyle(.plain)
-                            .focusable(false)
-                            .foregroundColor(theme.secondaryText)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                        }
-                    }
-                    .padding(12)
-                    .background(theme.hoveredBackground)
-                    .cornerRadius(8)
-                }
-            }
-
-            if let message = exportMessage {
-                HStack {
-                    Image(systemName: message.contains("Success") ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .foregroundColor(message.contains("Success") ? .green : theme.destructive)
-                    Text(message)
-                        .font(.system(size: 12))
-                        .foregroundColor(message.contains("Success") ? .green : theme.destructive)
-                }
-            }
-        }
-        .padding(24)
-    }
-    
     private func saveAPIKey() {
         errorMessage = nil
         showSuccess = false
@@ -571,84 +487,6 @@ struct SettingsView: View {
             errorMessage = nil
         } else {
             errorMessage = "Failed to remove API key"
-        }
-    }
-
-    private func exportEncryptionKey() {
-        exportMessage = nil
-
-        guard let keyString = KeychainService.shared.exportEncryptionKey() else {
-            exportMessage = "Error: Could not export encryption key"
-            return
-        }
-
-        let savePanel = NSSavePanel()
-        savePanel.title = "Export Encryption Key"
-        savePanel.message = "Save your encryption key to a secure location"
-        savePanel.nameFieldStringValue = "lifeos-encryption-key.txt"
-        savePanel.canCreateDirectories = true
-
-        savePanel.begin { response in
-            if response == .OK, let url = savePanel.url {
-                do {
-                    try keyString.write(to: url, atomically: true, encoding: .utf8)
-                    exportMessage = "Success: Encryption key exported to \(url.lastPathComponent)"
-
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                        exportMessage = nil
-                    }
-                } catch {
-                    exportMessage = "Error: Failed to save key file - \(error.localizedDescription)"
-                }
-            }
-        }
-    }
-
-    private func exportAllEntries() {
-        exportMessage = nil
-
-        let savePanel = NSSavePanel()
-        savePanel.title = "Export All Entries (Plaintext)"
-        savePanel.message = "Choose where to save the decrypted entries"
-        savePanel.nameFieldStringValue = "lifeos-export-\(Int(Date().timeIntervalSince1970)).zip"
-        savePanel.allowedContentTypes = [.zip]
-        savePanel.canCreateDirectories = true
-
-        savePanel.begin { response in
-            if response == .OK, let url = savePanel.url {
-                if fileService.exportAllEntriesPlaintext(to: url) {
-                    exportMessage = "Success: All entries exported to \(url.lastPathComponent)"
-
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                        exportMessage = nil
-                    }
-                } else {
-                    exportMessage = "Error: Failed to export entries"
-                }
-            }
-        }
-    }
-
-    private func importEncryptionKey() {
-        exportMessage = nil
-
-        let trimmedKey = importKeyText.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedKey.isEmpty else {
-            exportMessage = "Error: Please paste an encryption key"
-            return
-        }
-
-        if KeychainService.shared.importEncryptionKey(base64String: trimmedKey) {
-            exportMessage = "Success: Encryption key imported"
-            showImportField = false
-            importKeyText = ""
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                exportMessage = nil
-            }
-        } else {
-            exportMessage = "Error: Invalid encryption key format"
         }
     }
 
@@ -732,28 +570,6 @@ struct SettingsView: View {
 
             // Actions
             VStack(alignment: .leading, spacing: 12) {
-                Button("Inspect Entry Files (Debug)") {
-                    showEntryInspector = true
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(theme.accentColor)
-                .cornerRadius(6)
-
-                Button("Consolidate Duplicate Files") {
-                    consolidateDuplicates()
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(theme.accentColor)
-                .cornerRadius(6)
-
                 Button("Process All Entries") {
                     processAllEntries()
                 }
@@ -789,9 +605,6 @@ struct SettingsView: View {
             currentProgress = embeddingService.currentEntryIndex
             totalToProcess = embeddingService.totalEntries
         }
-        .sheet(isPresented: $showEntryInspector) {
-            EntryInspectorView()
-        }
         .alert("Clear Embeddings Database?", isPresented: $showClearConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Clear", role: .destructive) {
@@ -799,6 +612,125 @@ struct SettingsView: View {
             }
         } message: {
             Text("This will delete all embeddings. You can regenerate them by processing entries again.")
+        }
+    }
+
+    private var dataSection: some View {
+        @Bindable var vm = dataViewModel
+
+        return VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Data & Backup")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(theme.primaryText)
+
+                Text("Reset the database (including embeddings) and import markdown backups from the previous file-based storage.")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if vm.isResetting || vm.isImporting {
+                HStack(spacing: 12) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text(vm.isResetting ? "Resetting database..." : "Importing backup...")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(theme.primaryText)
+                    Spacer()
+                }
+                .padding(12)
+                .background(theme.hoveredBackground)
+                .cornerRadius(8)
+            }
+
+            if let result = vm.lastImportResult {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Import complete")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.primaryText)
+
+                    Text("Imported \(result.entriesImported) entries and \(result.todosImported) TODOs.")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.secondaryText)
+
+                    if !result.skippedFiles.isEmpty {
+                        Text("Skipped \(result.skippedFiles.count) file(s): \(result.skippedFiles.joined(separator: ", "))")
+                            .font(.system(size: 11))
+                            .foregroundColor(theme.tertiaryText)
+                            .lineLimit(2)
+                    }
+                }
+                .padding(12)
+                .background(theme.hoveredBackground)
+                .cornerRadius(8)
+            }
+
+            if let error = vm.errorMessage {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(theme.destructive)
+                    Text(error)
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.primaryText)
+                    Spacer()
+                }
+                .padding(12)
+                .background(theme.destructive.opacity(0.1))
+                .cornerRadius(8)
+            }
+
+            HStack(spacing: 12) {
+                Button("Reset Database & Embeddings") {
+                    showDataResetConfirmation = true
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(vm.isResetting || vm.isImporting ? theme.dividerColor : theme.destructive)
+                .cornerRadius(6)
+                .disabled(vm.isResetting || vm.isImporting)
+
+                Button("Import Backup (.zip, folder, or .md)") {
+                    showBackupImporter = true
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(vm.isResetting || vm.isImporting ? theme.dividerColor : theme.accentColor)
+                .cornerRadius(6)
+                .disabled(vm.isResetting || vm.isImporting)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("What this does")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(theme.primaryText)
+                Text("• Reset removes all entries, todos, sticky notes, conversations, analytics, and embeddings.")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.secondaryText)
+                Text("• Import automatically resets first, then loads markdown files with frontmatter (date/year) and TODO lists.")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.secondaryText)
+                Text("• After importing, run “Process All Entries” in Embeddings to rebuild search.")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.secondaryText)
+            }
+
+            Spacer()
+        }
+        .padding(24)
+        .alert("Reset all data?", isPresented: $showDataResetConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset", role: .destructive) {
+                dataViewModel.resetDatabase()
+            }
+        } message: {
+            Text("This will delete every entry, todo, sticky note, conversation, and embedding. This cannot be undone.")
         }
     }
 
@@ -976,7 +908,7 @@ struct SettingsView: View {
 
     /* REMOVED: analytics
     private func loadAnalyticsStats() {
-        totalEntries = fileService.loadExistingEntries().count
+        // Legacy file-based analytics removed
 
         // Load auto-processing preference
         autoProcessingEnabled = AnalyticsObserver.shared.isAutoProcessingEnabled
@@ -1081,6 +1013,7 @@ struct SettingsView: View {
         embeddingService.loadStats()
 
         // Calculate database size
+        dbSize = "0"
         do {
             let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let dbURL = documentsPath.appendingPathComponent("LifeOS/analytics.db")
@@ -1123,16 +1056,4 @@ struct SettingsView: View {
         }
     }
 
-    private func consolidateDuplicates() {
-        Task { @MainActor in
-            print("🔄 Starting duplicate file consolidation...")
-            let (datesConsolidated, filesDeleted) = fileService.consolidateAllDuplicates()
-            print("✨ Consolidation complete!")
-            print("   - Dates consolidated: \(datesConsolidated)")
-            print("   - Files deleted: \(filesDeleted)")
-
-            // Refresh stats after consolidation
-            loadEmbeddingsStats()
-        }
-    }
 }

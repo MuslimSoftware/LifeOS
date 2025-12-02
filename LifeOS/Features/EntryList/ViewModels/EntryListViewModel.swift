@@ -1,6 +1,6 @@
-
 import Foundation
 import SwiftUI
+import GRDB
 
 @Observable
 class EntryListViewModel {
@@ -24,80 +24,84 @@ class EntryListViewModel {
         return draft.id == selectedId
     }
 
-    let fileService: FileManagerService
+    let entryRepo: EntryRepository
+    let todoRepo: TODORepository
+    let stickyRepo: StickyNoteRepository
     let chunkRepository: ChunkRepository
-    
-    init(fileService: FileManagerService, chunkRepository: ChunkRepository = ChunkRepository()) {
-        self.fileService = fileService
+
+    init(entryRepo: EntryRepository, todoRepo: TODORepository, stickyRepo: StickyNoteRepository, chunkRepository: ChunkRepository) {
+        self.entryRepo = entryRepo
+        self.todoRepo = todoRepo
+        self.stickyRepo = stickyRepo
         self.chunkRepository = chunkRepository
     }
     
     func loadExistingEntries() -> String? {
-        entries = fileService.loadExistingEntries()
+        prepareDatabase()
+
+        do {
+            entries = try entryRepo.getAllEntries()
+        } catch {
+            print("Error loading entries: \(error)")
+            entries = []
+        }
+
+        entries.removeAll { entry in
+            entry.journalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
         groupedEntries = groupEntriesByDate(entries)
-        
+
         let currentYear = Calendar.current.component(.year, from: Date())
         let currentMonth = Calendar.current.component(.month, from: Date())
         expandedYears.insert(currentYear)
         expandedMonths.insert("\(currentYear)-\(currentMonth)")
-        
-        let calendar = Calendar.current
-        let today = Date()
-        let todayStart = calendar.startOfDay(for: today)
-        
-        let hasEmptyEntryToday = entries.contains { entry in
-            if let entryDate = parseDateFromDisplayString(entry.date) {
-                let entryDayStart = calendar.startOfDay(for: entryDate)
-                return calendar.isDate(entryDayStart, inSameDayAs: todayStart) && entry.previewText.isEmpty
-            }
-            return false
-        }
-        
-        let hasOnlyWelcomeEntry = entries.count == 1 && fileService.entryContainsWelcomeMessage(entries[0])
 
         if entries.isEmpty {
             return createNewEntry(withWelcomeMessage: true)
-        } else if !hasEmptyEntryToday && !hasOnlyWelcomeEntry {
-            return createDraftEntry()
-        } else {
-            if let todayEntry = entries.first(where: { entry in
-                if let entryDate = parseDateFromDisplayString(entry.date) {
-                    let entryDayStart = calendar.startOfDay(for: entryDate)
-                    return calendar.isDate(entryDayStart, inSameDayAs: todayStart) && entry.previewText.isEmpty
-                }
-                return false
-            }) {
-                selectedEntryId = todayEntry.id
-                return loadEntry(entry: todayEntry)
-            } else if hasOnlyWelcomeEntry {
-                selectedEntryId = entries[0].id
-                return loadEntry(entry: entries[0])
-            }
         }
-        
-        return nil
+
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: Date())
+
+        if let todayEntry = entries.first(where: { isEntry($0, onSameDayAs: todayStart) }) {
+            selectedEntryId = todayEntry.id
+            expandSectionsForEntry(todayEntry)
+            return todayEntry.journalText
+        }
+
+        if let latestEntry = entries.first {
+            selectedEntryId = latestEntry.id
+            expandSectionsForEntry(latestEntry)
+            return latestEntry.journalText
+        }
+
+        return createNewEntry(withWelcomeMessage: true)
     }
     
     func createNewEntry(withWelcomeMessage: Bool = false) -> String {
-        let newEntry = HumanEntry.createNew()
-        entries.insert(newEntry, at: 0)
-        selectedEntryId = newEntry.id
-        
+        var newEntry = HumanEntry.createNew()
         var text = ""
-        
+
         if withWelcomeMessage {
             if let defaultMessageURL = Bundle.main.url(forResource: "default", withExtension: "md"),
                let defaultMessage = try? String(contentsOf: defaultMessageURL, encoding: .utf8) {
                 text = defaultMessage
             }
-            fileService.saveEntry(newEntry, content: text)
-            updatePreviewText(for: newEntry)
-        } else {
-            fileService.saveEntry(newEntry, content: text)
+            newEntry.journalText = text
+            let preview = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            newEntry.previewText = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
         }
-        
-        groupedEntries = groupEntriesByDate(entries)
-        
+
+        do {
+            try entryRepo.save(newEntry)
+            entries.insert(newEntry, at: 0)
+            selectedEntryId = newEntry.id
+            groupedEntries = groupEntriesByDate(entries)
+        } catch {
+            print("Error creating entry: \(error)")
+        }
+
         return text
     }
     
@@ -109,6 +113,34 @@ class EntryListViewModel {
 
         return ""
     }
+    
+    func importEntries(_ importedEntries: [ImportedEntry]) {
+        do {
+            try DatabaseService.shared.initialize()
+        } catch {
+            print("⚠️ Failed to initialize database for import: \(error)")
+        }
+
+        for imported in importedEntries {
+            var newEntry = HumanEntry.createWithDate(date: imported.date)
+            newEntry.journalText = imported.text
+
+            let preview = imported.text
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            newEntry.previewText = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
+
+            do {
+                try entryRepo.save(newEntry)
+                entries.append(newEntry)
+            } catch {
+                print("⚠️ Failed to save imported entry \(imported.filename): \(error)")
+            }
+        }
+
+        entries.sort { $0.createdAt > $1.createdAt }
+        groupedEntries = groupEntriesByDate(entries)
+    }
 
     func addEntryAndRefresh(_ entry: HumanEntry) {
         entries.insert(entry, at: 0)
@@ -116,33 +148,71 @@ class EntryListViewModel {
     }
 
     func loadEntry(entry: HumanEntry) -> String? {
-        return fileService.loadEntry(entry)
+        let trimmed = entry.journalText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return entry.journalText
+        }
+
+        do {
+            guard let loadedEntry = try entryRepo.getEntry(id: entry.id) else {
+                return nil
+            }
+            if let index = entries.firstIndex(where: { $0.id == entry.id }) {
+                entries[index] = loadedEntry
+                groupedEntries = groupEntriesByDate(entries)
+            }
+            return loadedEntry.journalText
+        } catch {
+            print("Error loading entry: \(error)")
+            return nil
+        }
     }
     
     func saveEntry(entry: HumanEntry, content: String) {
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedContent.count > 0 else { return }
+
         if let draft = draftEntry, draft.id == entry.id {
-            if !content.isEmpty {
-                promoteDraftToSaved(entry: entry, content: content)
-            }
+            promoteDraftToSaved(entry: entry, content: content)
         } else {
-            fileService.saveEntry(entry, content: content)
+            var updatedEntry = entry
+            updatedEntry.journalText = content
 
             if content.count < 20 {
-                updatePreviewTextFromContent(for: entry, content: content)
+                let preview = content.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+                updatedEntry.previewText = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
             } else {
-                updatePreviewText(for: entry)
+                let preview = content.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+                updatedEntry.previewText = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
+            }
+
+            do {
+                try entryRepo.save(updatedEntry)
+                if let index = entries.firstIndex(where: { $0.id == entry.id }) {
+                    entries[index] = updatedEntry
+                    groupedEntries = groupEntriesByDate(entries)
+                }
+            } catch {
+                print("Error saving entry: \(error)")
             }
         }
     }
 
     func saveEntryWithoutPreviewUpdate(entry: HumanEntry, content: String) {
+        let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedContent.count > 0 else { return }
+
         if let draft = draftEntry, draft.id == entry.id {
-            if !content.isEmpty {
-                promoteDraftToSaved(entry: entry, content: content)
-            }
+            promoteDraftToSaved(entry: entry, content: content)
         } else {
-            // Only save to disk, skip expensive preview updates during typing
-            fileService.saveEntry(entry, content: content)
+            var updatedEntry = entry
+            updatedEntry.journalText = content
+
+            do {
+                try entryRepo.save(updatedEntry)
+            } catch {
+                print("Error saving entry: \(error)")
+            }
         }
     }
     
@@ -151,23 +221,31 @@ class EntryListViewModel {
             return
         }
 
-        fileService.saveEntry(entry, content: content)
-        entries.insert(entry, at: 0)
-        groupedEntries = groupEntriesByDate(entries)
-        
-        let currentYear = Calendar.current.component(.year, from: Date())
-        let currentMonth = Calendar.current.component(.month, from: Date())
-        expandedYears.insert(currentYear)
-        expandedMonths.insert("\(currentYear)-\(currentMonth)")
-        
-        updatePreviewTextFromContent(for: entry, content: content)
-        draftEntry = nil
+        var updatedEntry = entry
+        updatedEntry.journalText = content
+        let preview = content.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        updatedEntry.previewText = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
+
+        do {
+            try entryRepo.save(updatedEntry)
+            entries.insert(updatedEntry, at: 0)
+            groupedEntries = groupEntriesByDate(entries)
+
+            let currentYear = Calendar.current.component(.year, from: Date())
+            let currentMonth = Calendar.current.component(.month, from: Date())
+            expandedYears.insert(currentYear)
+            expandedMonths.insert("\(currentYear)-\(currentMonth)")
+
+            draftEntry = nil
+        } catch {
+            print("Error promoting draft to saved: \(error)")
+        }
     }
     
     func deleteEntry(entry: HumanEntry) -> String? {
         if let draft = draftEntry, draft.id == entry.id {
             draftEntry = nil
-            
+
             if let firstEntry = entries.first {
                 selectedEntryId = firstEntry.id
                 return loadEntry(entry: firstEntry)
@@ -175,37 +253,43 @@ class EntryListViewModel {
                 return createDraftEntry()
             }
         }
-        
+
         do {
-            try fileService.deleteEntry(entry)
             try? chunkRepository.deleteChunks(forEntryId: entry.id)
-            
+            try entryRepo.delete(id: entry.id)
+
             if let index = entries.firstIndex(where: { $0.id == entry.id }) {
                 entries.remove(at: index)
                 groupedEntries = groupEntriesByDate(entries)
-                
+
                 if selectedEntryId == entry.id {
                     if let firstEntry = entries.first {
                         selectedEntryId = firstEntry.id
                         return loadEntry(entry: firstEntry)
                     } else {
-                        return createNewEntry()
+                        return createDraftEntry()
                     }
                 }
             }
         } catch {
-            print("Error deleting file: \(error)")
+            print("Error deleting entry: \(error)")
         }
         return nil
     }
     
     func updatePreviewText(for entry: HumanEntry) {
-        if let index = entries.firstIndex(where: { $0.id == entry.id }) {
-            entries[index].previewText = fileService.getPreviewText(for: entry)
-            groupedEntries = groupEntriesByDate(entries)
+        do {
+            guard let loadedEntry = try entryRepo.getEntry(id: entry.id) else { return }
+            if let index = entries.firstIndex(where: { $0.id == entry.id }) {
+                let preview = loadedEntry.journalText.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+                entries[index].previewText = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
+                groupedEntries = groupEntriesByDate(entries)
+            }
+        } catch {
+            print("Error updating preview text: \(error)")
         }
     }
-    
+
     private func updatePreviewTextFromContent(for entry: HumanEntry, content: String) {
         if let index = entries.firstIndex(where: { $0.id == entry.id }) {
             let preview = content
@@ -216,15 +300,31 @@ class EntryListViewModel {
         }
     }
     
-    private func parseDateFromDisplayString(_ displayDate: String) -> Date? {
+    private func prepareDatabase() {
+        do {
+            try DatabaseService.shared.initialize()
+        } catch {
+            print("⚠️ Failed to initialize database: \(error)")
+        }
+    }
+
+
+    private func isEntry(_ entry: HumanEntry, onSameDayAs date: Date) -> Bool {
+        guard let entryDate = buildDate(from: entry) else { return false }
+        let calendar = Calendar.current
+        let entryDayStart = calendar.startOfDay(for: entryDate)
+        return calendar.isDate(entryDayStart, inSameDayAs: date)
+    }
+
+    private func buildDate(from entry: HumanEntry) -> Date? {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MMM d"
-        if let entryDate = dateFormatter.date(from: displayDate) {
-            var components = Calendar.current.dateComponents([.year, .month, .day], from: entryDate)
-            components.year = Calendar.current.component(.year, from: Date())
-            return Calendar.current.date(from: components)
-        }
-        return nil
+
+        guard let baseDate = dateFormatter.date(from: entry.date) else { return nil }
+
+        var components = Calendar.current.dateComponents([.month, .day], from: baseDate)
+        components.year = entry.year
+        return Calendar.current.date(from: components)
     }
     
     private func groupEntriesByDate(_ entries: [HumanEntry]) -> [EntryGroup] {

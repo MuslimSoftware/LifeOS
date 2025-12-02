@@ -12,12 +12,10 @@ class ImportViewModel {
     var errorMessage: String? = nil
     
     private let importService = ImportService()
-    private let fileService: FileManagerService
     private let entryListViewModel: EntryListViewModel
     private var importTask: Task<Void, Never>?
     
-    init(fileService: FileManagerService, entryListViewModel: EntryListViewModel) {
-        self.fileService = fileService
+    init(entryListViewModel: EntryListViewModel) {
         self.entryListViewModel = entryListViewModel
     }
     
@@ -108,37 +106,7 @@ class ImportViewModel {
     }
     
     func importEntries() {
-        for importedEntry in importedEntries {
-            let newEntry = HumanEntry.createWithDate(date: importedEntry.date)
-            
-            entryListViewModel.entries.insert(newEntry, at: 0)
-            
-            fileService.saveEntry(newEntry, content: importedEntry.text)
-            entryListViewModel.updatePreviewText(for: newEntry)
-        }
-        
-        entryListViewModel.entries.sort { entry1, entry2 in
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "MMM d"
-            
-            guard let date1 = dateFormatter.date(from: entry1.date),
-                  let date2 = dateFormatter.date(from: entry2.date) else {
-                return entry1.date > entry2.date
-            }
-            
-            var components1 = Calendar.current.dateComponents([.month, .day], from: date1)
-            components1.year = entry1.year
-            var components2 = Calendar.current.dateComponents([.month, .day], from: date2)
-            components2.year = entry2.year
-            
-            guard let fullDate1 = Calendar.current.date(from: components1),
-                  let fullDate2 = Calendar.current.date(from: components2) else {
-                return entry1.date > entry2.date
-            }
-            
-            return fullDate1 > fullDate2
-        }
-        
+        entryListViewModel.importEntries(importedEntries)
         reset()
     }
     

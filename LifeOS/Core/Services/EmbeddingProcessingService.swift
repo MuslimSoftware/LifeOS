@@ -13,17 +13,17 @@ class EmbeddingProcessingService: ObservableObject {
 
     private var processingTask: Task<Void, Never>?
 
-    private let fileService: FileManagerService
+    private let entryRepo: EntryRepository
     private let openAI: OpenAIService
     private let chunkRepo: ChunkRepository
     private let dbService: DatabaseService
 
     private init(
-        fileService: FileManagerService = FileManagerService(),
+        entryRepo: EntryRepository = EntryRepository(),
         openAI: OpenAIService = OpenAIService(),
         dbService: DatabaseService = .shared
     ) {
-        self.fileService = fileService
+        self.entryRepo = entryRepo
         self.openAI = openAI
         self.dbService = dbService
         self.chunkRepo = ChunkRepository(dbService: dbService)
@@ -31,21 +31,20 @@ class EmbeddingProcessingService: ObservableObject {
 
     /// Load statistics about total and processed entries
     func loadStats() {
-        let existingEntries = fileService.loadExistingEntries()
-        totalEntries = existingEntries.count
-
         do {
             try dbService.initialize()
 
-            // Count unique entry IDs that have embeddings AND still exist in filesystem
+            let existingEntries = try entryRepo.getAllEntries()
+            totalEntries = existingEntries.count
+
             let allChunks = try chunkRepo.getAllChunks()
             let uniqueEntryIds = Set(allChunks.map { $0.entryId })
             let existingEntryIds = Set(existingEntries.map { $0.id })
-            
-            // Only count entries that exist in both database and filesystem
+
             processedEntries = uniqueEntryIds.intersection(existingEntryIds).count
         } catch {
             print("⚠️ Failed to load embeddings stats: \(error)")
+            totalEntries = 0
             processedEntries = 0
         }
     }
@@ -67,10 +66,9 @@ class EmbeddingProcessingService: ObservableObject {
             do {
                 try dbService.initialize()
 
-                let allEntries = fileService.loadExistingEntries()
+                let allEntries = try entryRepo.getAllEntries()
                 totalEntries = allEntries.count
 
-                // Filter out already-processed entries
                 var entriesToProcess: [HumanEntry] = []
                 for entry in allEntries {
                     if try !chunkRepo.hasChunksForEntry(entryId: entry.id) {
@@ -92,14 +90,8 @@ class EmbeddingProcessingService: ObservableObject {
                     print("📈 Progress: \(self.currentEntryIndex)/\(entriesToProcess.count)")
                     self.objectWillChange.send()
 
-                    // Load entry content (loadEntry already extracts journal section only)
-                    guard let content = fileService.loadEntry(entry) else {
-                        print("⚠️ Failed to load content for entry: \(entry.id)")
-                        continue
-                    }
+                    let content = entry.journalText
 
-                    // Skip entries with empty journal section
-                    // This matches the filtering logic in loadExistingEntries()
                     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                         print("⚠️ Skipping entry with empty journal section: \(entry.id)")
                         continue
@@ -151,58 +143,36 @@ class EmbeddingProcessingService: ObservableObject {
         processingTask = nil
     }
 
-    /// Clean up orphaned entries (entries in database but not in filesystem)
-    /// Attempts to recover entries first before deleting
+    /// Clean up orphaned entries (entries in database but not in repository)
     /// Also cleans up chunks for entries with empty journal sections
     func cleanupOrphanedEntries() {
         do {
             try dbService.initialize()
 
-            let existingEntries = fileService.loadExistingEntries()
+            let existingEntries = try entryRepo.getAllEntries()
             let existingIds = Set(existingEntries.map { $0.id })
 
             let allChunks = try chunkRepo.getAllChunks()
-            let dbEntryIds = Set(allChunks.map { $0.entryId })
+            let chunkEntryIds = Set(allChunks.map { $0.entryId })
 
-            let orphanedIds = dbEntryIds.subtracting(existingIds)
+            let orphanedIds = chunkEntryIds.subtracting(existingIds)
 
-            // Phase 1: Clean up orphaned entries (deleted files)
             if !orphanedIds.isEmpty {
-                print("🔍 Found \(orphanedIds.count) orphaned entries in database")
+                print("🔍 Found \(orphanedIds.count) orphaned chunks in database")
 
-                // Try to recover entries first
-                let recoveryService = EntryRecoveryService(
-                    fileService: fileService,
-                    chunkRepo: chunkRepo,
-                    dbService: dbService
-                )
-
-                var recoveredCount = 0
                 for orphanedId in orphanedIds {
-                    if recoveryService.recoverEntry(entryId: orphanedId) {
-                        recoveredCount += 1
-                    } else {
-                        // If recovery fails, clean up the orphaned embeddings
-                        try? chunkRepo.deleteChunks(forEntryId: orphanedId)
-                        print("🗑️ Removed embeddings for unrecoverable entry: \(orphanedId)")
-                    }
-                }
-
-                if recoveredCount > 0 {
-                    print("✅ Recovered \(recoveredCount) deleted entries!")
+                    try? chunkRepo.deleteChunks(forEntryId: orphanedId)
+                    print("🗑️ Removed embeddings for deleted entry: \(orphanedId)")
                 }
             }
 
-            // Phase 2: Clean up chunks for entries with empty journal sections
-            // loadExistingEntries() only returns entries with non-empty journal sections
-            // So we can use existingIds as the set of valid entry IDs
             print("🔍 Checking for chunks from entries with empty journal sections...")
             let emptyJournalCleanupCount = try chunkRepo.deleteChunksForEmptyJournalEntries(validEntryIds: existingIds)
             if emptyJournalCleanupCount > 0 {
                 print("✅ Cleaned up \(emptyJournalCleanupCount) entries with empty journal sections")
             }
 
-            loadStats() // Refresh counts
+            loadStats()
         } catch {
             print("⚠️ Failed to cleanup orphaned entries: \(error)")
         }
@@ -266,40 +236,6 @@ class EmbeddingProcessingService: ObservableObject {
 
     /// Parse entry date from HumanEntry
     private func parseEntryDate(_ entry: HumanEntry) -> Date {
-        // Extract date from filename format: [UUID]-[yyyy-MM-dd-HH-mm-ss].md
-        // We need to extract just the second bracketed section
-        let filename = entry.filename
-
-        // Find the second occurrence of brackets
-        if let secondBracketStart = filename.range(of: "]-["),
-           let closingBracket = filename.range(of: "].md") {
-            let startIndex = filename.index(secondBracketStart.upperBound, offsetBy: 0)
-            let endIndex = closingBracket.lowerBound
-
-            // Validate that startIndex <= endIndex to prevent range crash
-            guard startIndex <= endIndex else {
-                print("⚠️ Invalid filename format for date parsing: \(filename)")
-                print("⚠️ Falling back to current date for entry: \(entry.id)")
-                return Date()
-            }
-
-            let dateString = String(filename[startIndex..<endIndex])
-
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-            formatter.timeZone = TimeZone(identifier: "UTC")
-            if let date = formatter.date(from: dateString) {
-                return date
-            } else {
-                print("⚠️ Failed to parse date string '\(dateString)' from filename: \(filename)")
-                print("⚠️ Falling back to current date for entry: \(entry.id)")
-            }
-        } else {
-            print("⚠️ Could not find date brackets in filename: \(filename)")
-            print("⚠️ Falling back to current date for entry: \(entry.id)")
-        }
-
-        // Fallback to current date
-        return Date()
+        return entry.createdAt
     }
 }

@@ -7,7 +7,6 @@ struct BottomNavigationView: View {
     @Environment(\.theme) private var theme
     
     let availableFonts: [String]
-    let fileService: FileManagerService
     @Binding var selectedDate: Date
     
     @State private var hoveredTimerControl: String? = nil

@@ -4,13 +4,13 @@ import SwiftUI
 struct LifeOSApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var settings = AppSettings()
-    
+
     init() {
         if let fontURL = Bundle.main.url(forResource: "Lato-Regular", withExtension: "ttf") {
             CTFontManagerRegisterFontsForURL(fontURL as CFURL, .process, nil)
         }
     }
-     
+
     var body: some Scene {
         WindowGroup(content: {
             ContentView()

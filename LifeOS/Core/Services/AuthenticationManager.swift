@@ -5,6 +5,8 @@ import Combine
 /// Notification posted when authentication state changes
 extension Notification.Name {
     static let authenticationDidChange = Notification.Name("authenticationDidChange")
+    static let databaseDidReset = Notification.Name("databaseDidReset")
+    static let dataImportCompleted = Notification.Name("dataImportCompleted")
 }
 
 /// Centralized authentication manager to handle API key access and caching

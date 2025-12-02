@@ -7,7 +7,6 @@ struct JournalPageView: View {
     @Environment(\.theme) private var theme
     
     let pdfService: PDFExportService
-    let fileService: FileManagerService
     
     @State private var selectedDate: Date = Date()
     
@@ -25,7 +24,6 @@ struct JournalPageView: View {
                     Spacer()
                     BottomNavigationView(
                         availableFonts: NSFontManager.shared.availableFontFamilies,
-                        fileService: fileService,
                         selectedDate: $selectedDate
                     )
                 }
@@ -51,7 +49,6 @@ struct JournalPageView: View {
                 Divider()
 
                 EntryListView(
-                    fileService: fileService,
                     pdfService: pdfService
                 )
             }

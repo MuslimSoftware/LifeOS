@@ -1,4 +1,5 @@
 import SwiftUI
+import GRDB
 
 struct CalendarView: View {
     @Environment(\.theme) private var theme
@@ -16,9 +17,21 @@ struct CalendarView: View {
     @State private var todoCounts: [String: (incomplete: Int, completed: Int)] = [:]
     @State private var stickyNoteText: String = ""
     @State private var saveTimer: Timer?
+    @State private var currentStickyNote: StickyNote?
+    @State private var stickyNoteDays: Set<String> = []
 
     private let calendar = Calendar.current
     private let daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    private let stickyRepo: StickyNoteRepository
+    private let entryRepo: EntryRepository
+    private let todoRepo: TODORepository
+
+    init(selectedRoute: Binding<NavigationRoute>, stickyRepo: StickyNoteRepository, entryRepo: EntryRepository, todoRepo: TODORepository) {
+        _selectedRoute = selectedRoute
+        self.stickyRepo = stickyRepo
+        self.entryRepo = entryRepo
+        self.todoRepo = todoRepo
+    }
     
     var body: some View {
         GeometryReader { geometry in
@@ -48,6 +61,7 @@ struct CalendarView: View {
                                         DayCell(
                                             day: day,
                                             hasEntry: hasEntry(for: day),
+                                            hasStickyNote: hasStickyNote(for: day),
                                             isToday: isToday(day),
                                             isSelected: isSelected(day),
                                             theme: theme,
@@ -100,7 +114,9 @@ struct CalendarView: View {
                                     .frame(width: 1)
 
                                 VStack(spacing: 0) {
-                                    let entries = entriesForSelectedDay(selectedDay)
+                                    let entries = entriesForSelectedDay(selectedDay).filter {
+                                        !$0.journalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    }
                                     if let entry = entries.first {
                                         JournalEntryIndicator(
                                             entry: entry,
@@ -190,10 +206,11 @@ struct CalendarView: View {
             )
             .onAppear {
                 if todoViewModel == nil {
-                    todoViewModel = TODOViewModel(fileService: entryListViewModel.fileService)
+                    todoViewModel = TODOViewModel(todoRepo: todoRepo, entryRepo: entryRepo)
                     updateTODOsForSelectedDay()
                 }
                 refreshTODOCounts()
+                refreshStickyNotes()
                 loadStickyNoteForSelectedDay()
 
                 NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
@@ -251,17 +268,17 @@ struct CalendarView: View {
             }
             .onChange(of: currentMonth) {
                 refreshTODOCounts()
+                refreshStickyNotes()
             }
             .onReceive(NotificationCenter.default.publisher(for: .todosDidChange)) { _ in
                 refreshTODOCounts()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .entriesDidConsolidate)) { _ in
-                // Reload entries when consolidation happens
-                _ = entryListViewModel.loadExistingEntries()
-                refreshTODOCounts()
-                if selectedDay != nil {
-                    loadStickyNoteForSelectedDay()
-                }
+            .onReceive(NotificationCenter.default.publisher(for: .databaseDidReset)) { _ in
+                stickyNoteText = ""
+                currentStickyNote = nil
+                stickyNoteDays = []
+                todoCounts = [:]
+                todoViewModel?.loadTODOs(forDate: selectedDay)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -366,94 +383,97 @@ struct CalendarView: View {
     private func createJournalForSelectedDay() {
         guard let selectedDay = selectedDay else { return }
 
-        if let entry = entryListViewModel.fileService.findExistingFileForDate(date: selectedDay) {
-            entryListViewModel.addEntryAndRefresh(entry)
-            entryListViewModel.expandSectionsForEntry(entry)
-            entryListViewModel.selectedEntryId = entry.id
+        do {
+            if let entry = try entryRepo.getEntry(forDate: selectedDay) {
+                entryListViewModel.addEntryAndRefresh(entry)
+                entryListViewModel.expandSectionsForEntry(entry)
+                entryListViewModel.selectedEntryId = entry.id
 
-            editorViewModel.isLoadingContent = true
-            if let content = entryListViewModel.loadEntry(entry: entry) {
-                editorViewModel.text = content
+                editorViewModel.isLoadingContent = true
+                if let content = entryListViewModel.loadEntry(entry: entry) {
+                    editorViewModel.text = content
+                } else {
+                    editorViewModel.text = ""
+                }
+                editorViewModel.isLoadingContent = false
+
+                selectedRoute = .journal
             } else {
+                let newEntry = HumanEntry.createWithDate(date: selectedDay)
+
+                try entryRepo.save(newEntry)
+                entryListViewModel.addEntryAndRefresh(newEntry)
+                entryListViewModel.expandSectionsForEntry(newEntry)
+                entryListViewModel.selectedEntryId = newEntry.id
+
+                editorViewModel.isLoadingContent = true
                 editorViewModel.text = ""
+                editorViewModel.isLoadingContent = false
+                selectedRoute = .journal
             }
-            editorViewModel.isLoadingContent = false
-
-            selectedRoute = .journal
-        } else {
-            let newEntry = HumanEntry.createWithDate(date: selectedDay)
-
-            entryListViewModel.addEntryAndRefresh(newEntry)
-            entryListViewModel.fileService.saveEntry(newEntry, content: "")
-            entryListViewModel.expandSectionsForEntry(newEntry)
-            entryListViewModel.selectedEntryId = newEntry.id
-
-            editorViewModel.isLoadingContent = true
-            editorViewModel.text = ""
-            editorViewModel.isLoadingContent = false
-            selectedRoute = .journal
+        } catch {
+            print("Error creating journal for selected day: \(error)")
         }
     }
 
     private func updateTODOsForSelectedDay() {
-        guard let selectedDay = selectedDay else {
-            todoViewModel?.loadTODOs(for: nil, date: nil)
-            return
+        todoViewModel?.loadTODOs(forDate: selectedDay)
+
+        if let selectedDay = selectedDay {
+            updateTODOCountsForDate(selectedDay)
         }
-
-        let entries = entriesForSelectedDay(selectedDay)
-        let entry = entries.first
-        todoViewModel?.loadTODOs(for: entry, date: selectedDay)
-
-        // Update calendar counts for this day after loading
-        updateTODOCountsForDate(selectedDay)
     }
 
     private func loadStickyNoteForSelectedDay() {
         guard let selectedDay = selectedDay else {
             stickyNoteText = ""
+            currentStickyNote = nil
             return
         }
 
-        stickyNoteText = entryListViewModel.fileService.loadStickyNoteForDate(date: selectedDay)
+        do {
+                if let note = try stickyRepo.getStickyNote(forDate: selectedDay) {
+                    stickyNoteText = note.content
+                    currentStickyNote = note
+                } else {
+                    stickyNoteText = ""
+                currentStickyNote = nil
+            }
+        } catch {
+            print("Error loading sticky note: \(error)")
+            stickyNoteText = ""
+            currentStickyNote = nil
+        }
     }
 
     private func saveStickyNote(for day: Date, text: String) {
-        let entries = entriesForSelectedDay(day)
-        var entry = entries.first
-
-        // If no journal entry exists, check if TODO has already created an entry for this day
-        if entry == nil, let todoEntry = todoViewModel?.currentEntry {
-            // Use the TODO's entry if it matches this day
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "MMM d"
-            let dayString = dateFormatter.string(from: day)
-            let dayYear = calendar.component(.year, from: day)
-
-            if todoEntry.date == dayString && todoEntry.year == dayYear {
-                entry = todoEntry
-            }
-        }
-
-        // If still no entry, find or create one
-        if entry == nil {
-            entry = entryListViewModel.fileService.findExistingFileForDate(date: day)
-
-            if entry == nil {
-                let newEntry = HumanEntry.createWithDate(date: day)
-                entryListViewModel.fileService.saveEntry(newEntry, content: "")
-                entry = newEntry
-            }
-        }
-
-        if let entry = entry {
-            // Update todoViewModel's entry reference if it matches this date
-            if let todoEntry = todoViewModel?.currentEntry,
-               todoEntry.date == entry.date && todoEntry.year == entry.year {
-                todoViewModel?.currentEntry = entry
+        do {
+            if let existingNote = currentStickyNote {
+                var updated = existingNote
+                updated.content = text
+                try stickyRepo.save(updated)
+                currentStickyNote = updated
+            } else {
+                let newNote = StickyNote(
+                    id: UUID(),
+                    date: day,
+                    content: text,
+                    createdAt: Date(),
+                    updatedAt: Date()
+                )
+                try stickyRepo.save(newNote)
+                currentStickyNote = newNote
             }
 
-            entryListViewModel.fileService.saveStickyNote(text, for: entry)
+            let key = dateKey(for: day)
+            let hasContent = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if hasContent {
+                stickyNoteDays.insert(key)
+            } else {
+                stickyNoteDays.remove(key)
+            }
+        } catch {
+            print("Error saving sticky note: \(error)")
         }
     }
 
@@ -463,14 +483,11 @@ struct CalendarView: View {
     }
 
     private func updateTODOCountsForDate(_ date: Date) {
-        guard let todos = todoViewModel?.todos else { return }
-
-        let incomplete = todos.filter { !$0.completed }.count
-        let completed = todos.filter { $0.completed }.count
-
+        let counts = loadTODOCounts(for: date)
         let key = dateKey(for: date)
-        if incomplete > 0 || completed > 0 {
-            todoCounts[key] = (incomplete, completed)
+
+        if counts.incomplete > 0 || counts.completed > 0 {
+            todoCounts[key] = counts
         } else {
             todoCounts.removeValue(forKey: key)
         }
@@ -482,17 +499,47 @@ struct CalendarView: View {
         for day in daysInMonth {
             guard let day = day else { continue }
 
-            let (todos, _) = entryListViewModel.fileService.loadTODOsForDate(date: day)
-            let incomplete = todos.filter { !$0.completed }.count
-            let completed = todos.filter { $0.completed }.count
-
-            if incomplete > 0 || completed > 0 {
+            let counts = loadTODOCounts(for: day)
+            if counts.incomplete > 0 || counts.completed > 0 {
                 let dateKey = dateKey(for: day)
-                newCounts[dateKey] = (incomplete, completed)
+                newCounts[dateKey] = counts
             }
         }
 
         todoCounts = newCounts
+    }
+
+    private func loadTODOCounts(for date: Date) -> (incomplete: Int, completed: Int) {
+        do {
+            let todos = try todoRepo.getTODOs(forDate: date)
+            let incomplete = todos.filter { !$0.completed }.count
+            let completed = todos.count - incomplete
+            return (incomplete, completed)
+        } catch {
+            print("Error loading TODOs for \(date): \(error)")
+            return (0, 0)
+        }
+    }
+
+    private func refreshStickyNotes() {
+        var daysWithNotes: Set<String> = []
+
+        for day in daysInMonth {
+            guard let day = day else { continue }
+
+            do {
+                if let note = try stickyRepo.getStickyNote(forDate: day) {
+                    let hasContent = !note.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    if hasContent {
+                        daysWithNotes.insert(dateKey(for: day))
+                    }
+                }
+            } catch {
+                print("Error loading sticky note for day: \(error)")
+            }
+        }
+
+        stickyNoteDays = daysWithNotes
     }
 
     private func dateKey(for date: Date) -> String {
@@ -511,11 +558,16 @@ struct CalendarView: View {
         formatter.dateFormat = "MMMM d"
         return formatter.string(from: date)
     }
+
+    private func hasStickyNote(for date: Date) -> Bool {
+        stickyNoteDays.contains(dateKey(for: date))
+    }
 }
 
 struct DayCell: View {
     let day: Date
     let hasEntry: Bool
+    let hasStickyNote: Bool
     let isToday: Bool
     let isSelected: Bool
     let theme: Theme
@@ -537,10 +589,20 @@ struct DayCell: View {
                     .font(.system(size: 16))
                     .foregroundColor(textColor)
 
-                if hasEntry {
-                    Circle()
-                        .fill(theme.accentColor)
-                        .frame(width: 6, height: 6)
+                if hasEntry || hasStickyNote {
+                    HStack(spacing: 4) {
+                        if hasEntry {
+                            Circle()
+                                .fill(theme.accentColor)
+                                .frame(width: 6, height: 6)
+                        }
+                        if hasStickyNote {
+                            Circle()
+                                .fill(Color.yellow)
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                    .frame(height: 6)
                 } else {
                     Spacer()
                         .frame(height: 6)
@@ -548,12 +610,12 @@ struct DayCell: View {
 
                 if incompleteTodoCount > 0 || completedTodoCount > 0 {
                     HStack(spacing: 3) {
-                        ForEach(0..<min(incompleteTodoCount, 3), id: \.self) { _ in
+                        ForEach(0..<incompleteTodoCount, id: \.self) { _ in
                             Circle()
                                 .stroke(theme.tertiaryText.opacity(0.6), lineWidth: 1)
                                 .frame(width: 5, height: 5)
                         }
-                        ForEach(0..<min(completedTodoCount, 3), id: \.self) { _ in
+                        ForEach(0..<completedTodoCount, id: \.self) { _ in
                             Circle()
                                 .fill(theme.tertiaryText.opacity(0.6))
                                 .frame(width: 5, height: 5)
@@ -579,7 +641,7 @@ struct DayCell: View {
         if isSelected {
             return theme.primaryText
         }
-        if hasEntry {
+        if hasEntry || hasStickyNote {
             return theme.primaryText
         }
         return theme.secondaryText
@@ -687,4 +749,3 @@ struct JournalEntryIndicator: View {
         .padding(.horizontal, 32)
     }
 }
-

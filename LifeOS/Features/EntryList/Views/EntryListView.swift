@@ -11,7 +11,6 @@ struct EntryListView: View {
     @State private var isHoveringPin = false
     @State private var showImportSheet = false
     
-    let fileService: FileManagerService
     let pdfService: PDFExportService
     
     var body: some View {
@@ -49,10 +48,6 @@ struct EntryListView: View {
 
                 // Three-dot menu
                 Menu {
-                    Button("Show in Finder") {
-                        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: fileService.documentsDirectory.path)
-                    }
-                    
                     Button("Import Entries") {
                         showImportSheet = true
                     }
@@ -207,7 +202,7 @@ struct EntryListView: View {
         .frame(width: 200)
         .background(theme.backgroundColor)
         .sheet(isPresented: $showImportSheet) {
-            ImportView(viewModel: ImportViewModel(fileService: fileService, entryListViewModel: viewModel))
+            ImportView(viewModel: ImportViewModel(entryListViewModel: viewModel))
         }
     }
     
