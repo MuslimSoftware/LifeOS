@@ -16,6 +16,14 @@ class StickyNoteRepository {
         }
     }
 
+    func saveBatch(_ notes: [StickyNote]) throws {
+        try dbService.getQueue().write { db in
+            for note in notes {
+                try note.save(db)
+            }
+        }
+    }
+
     func getStickyNote(forDate date: Date) throws -> StickyNote? {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)

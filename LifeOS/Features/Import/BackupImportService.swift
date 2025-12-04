@@ -29,7 +29,8 @@ struct BackupImportResult {
 private struct ParsedBackupEntry {
     let dateString: String
     let year: Int
-    let body: String
+    let journalText: String
+    let notes: String
     let todos: [ParsedBackupTODO]
     let createdAt: Date
 }
@@ -43,16 +44,19 @@ class BackupImportService {
     private let dbService: DatabaseService
     private let entryRepo: EntryRepository
     private let todoRepo: TODORepository
+    private let stickyNoteRepo: StickyNoteRepository
     private let fileManager = FileManager.default
 
     init(
         dbService: DatabaseService = .shared,
         entryRepo: EntryRepository = EntryRepository(),
-        todoRepo: TODORepository = TODORepository()
+        todoRepo: TODORepository = TODORepository(),
+        stickyNoteRepo: StickyNoteRepository = StickyNoteRepository()
     ) {
         self.dbService = dbService
         self.entryRepo = entryRepo
         self.todoRepo = todoRepo
+        self.stickyNoteRepo = stickyNoteRepo
     }
 
     /// Reset the database and import markdown backups from a zip or folder
@@ -79,6 +83,7 @@ class BackupImportService {
 
         var entries: [HumanEntry] = []
         var todos: [TODOItem] = []
+        var stickyNotes: [StickyNote] = []
         var skipped: [String] = []
 
         for file in markdownFiles {
@@ -88,19 +93,32 @@ class BackupImportService {
                     continue
                 }
 
-                let preview = buildPreview(from: parsed.body)
+                if !parsed.journalText.isEmpty {
+                    let preview = buildPreview(from: parsed.journalText)
 
-                let entry = HumanEntry(
-                    id: UUID(),
-                    date: parsed.dateString,
-                    year: parsed.year,
-                    journalText: parsed.body,
-                    previewText: preview,
-                    encryptedData: nil,
-                    createdAt: parsed.createdAt,
-                    updatedAt: parsed.createdAt
-                )
-                entries.append(entry)
+                    let entry = HumanEntry(
+                        id: UUID(),
+                        date: parsed.dateString,
+                        year: parsed.year,
+                        journalText: parsed.journalText,
+                        previewText: preview,
+                        encryptedData: nil,
+                        createdAt: parsed.createdAt,
+                        updatedAt: parsed.createdAt
+                    )
+                    entries.append(entry)
+                }
+
+                if !parsed.notes.isEmpty {
+                    let stickyNote = StickyNote(
+                        id: UUID(),
+                        date: parsed.createdAt,
+                        content: parsed.notes,
+                        createdAt: parsed.createdAt,
+                        updatedAt: parsed.createdAt
+                    )
+                    stickyNotes.append(stickyNote)
+                }
 
                 for todo in parsed.todos {
                     todos.append(TODOItem(
@@ -117,12 +135,15 @@ class BackupImportService {
             }
         }
 
-        guard !entries.isEmpty else {
+        guard !entries.isEmpty || !stickyNotes.isEmpty || !todos.isEmpty else {
             throw BackupImportError.noValidEntries
         }
 
         if !entries.isEmpty {
             try entryRepo.saveImportedBatch(entries)
+        }
+        if !stickyNotes.isEmpty {
+            try stickyNoteRepo.saveBatch(stickyNotes)
         }
         if !todos.isEmpty {
             try todoRepo.saveBatch(todos)
@@ -225,24 +246,24 @@ class BackupImportService {
 
         let contentResult = extractContent(from: lines)
         let createdAt = parseDate(dateString: dateString, year: year, fallback: fallbackDate)
-        let bodyText = contentResult.body.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if bodyText.isEmpty && contentResult.todos.isEmpty {
+        if contentResult.journalText.isEmpty && contentResult.notes.isEmpty && contentResult.todos.isEmpty {
             return nil
         }
 
         return ParsedBackupEntry(
             dateString: dateString,
             year: year,
-            body: bodyText,
+            journalText: contentResult.journalText,
+            notes: contentResult.notes,
             todos: contentResult.todos,
             createdAt: createdAt
         )
     }
 
-    private func extractContent(from lines: [String]) -> (body: String, todos: [ParsedBackupTODO]) {
+    private func extractContent(from lines: [String]) -> (journalText: String, notes: String, todos: [ParsedBackupTODO]) {
         var sectionMap: [String: [String]] = [:]
-        var currentSection: String = "body"
+        var currentSection: String = "journal"
         var todos: [ParsedBackupTODO] = []
 
         for line in lines {
@@ -265,36 +286,15 @@ class BackupImportService {
             }
         }
 
-        let rawBody = lines.joined(separator: "\n")
-        let trimmedBody = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if !trimmedBody.isEmpty {
-            return (rawBody, todos)
-        }
-
-        // Build a minimal body so entries aren't treated as empty
-        var rebuiltBody = ""
-        if let notes = sectionMap["notes"]?
+        let journalText = sectionMap["journal"]?
             .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-           !notes.isEmpty {
-            rebuiltBody += "## Notes\n\(notes)\n\n"
-        }
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-        if !todos.isEmpty {
-            rebuiltBody += "## TODOs\n"
-            rebuiltBody += todos.map { "- [\($0.completed ? "x" : " ")] \($0.text)" }.joined(separator: "\n")
-            rebuiltBody += "\n\n"
-        }
-
-        if let journal = sectionMap["journal"]?
+        let notes = sectionMap["notes"]?
             .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-           !journal.isEmpty {
-            rebuiltBody += "## Journal\n\(journal)\n"
-        }
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-        return (rebuiltBody.trimmingCharacters(in: .whitespacesAndNewlines), todos)
+        return (journalText, notes, todos)
     }
 
     private func parseTodoLine(_ line: String) -> ParsedBackupTODO? {

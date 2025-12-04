@@ -35,7 +35,77 @@ class EntryListViewModel {
         self.stickyRepo = stickyRepo
         self.chunkRepository = chunkRepository
     }
-    
+
+    private struct ParsedEntryContent {
+        let journalText: String
+        let notes: String
+        let todos: [ParsedTODO]
+        let isEmpty: Bool
+    }
+
+    private struct ParsedTODO {
+        let text: String
+        let completed: Bool
+    }
+
+    private func parseEntryContent(_ text: String) -> ParsedEntryContent {
+        let lines = text.components(separatedBy: .newlines)
+        var sectionMap: [String: [String]] = [:]
+        var currentSection: String = "journal"
+        var todos: [ParsedTODO] = []
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if trimmed.hasPrefix("##") {
+                var title = trimmed
+                while title.hasPrefix("#") || title.hasPrefix(" ") {
+                    title.removeFirst()
+                }
+                currentSection = title.trimmingCharacters(in: .whitespaces).lowercased()
+                sectionMap[currentSection, default: []] = []
+                continue
+            }
+
+            sectionMap[currentSection, default: []].append(line)
+
+            if currentSection.contains("todo"),
+               let todo = parseTodoLine(trimmed) {
+                todos.append(todo)
+            }
+        }
+
+        let journalText = sectionMap["journal"]?
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        let notes = sectionMap["notes"]?
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        let isEmpty = journalText.isEmpty && notes.isEmpty && todos.isEmpty
+
+        return ParsedEntryContent(
+            journalText: journalText,
+            notes: notes,
+            todos: todos,
+            isEmpty: isEmpty
+        )
+    }
+
+    private func parseTodoLine(_ line: String) -> ParsedTODO? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("- [") else { return nil }
+
+        let completed = trimmed.lowercased().contains("[x]")
+        guard let closing = trimmed.firstIndex(of: "]") else { return nil }
+
+        let text = trimmed[trimmed.index(after: closing)...].trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return nil }
+
+        return ParsedTODO(text: text, completed: completed)
+    }
+
     func loadExistingEntries() -> String? {
         prepareDatabase()
 
@@ -122,17 +192,59 @@ class EntryListViewModel {
         }
 
         for imported in importedEntries {
-            var newEntry = HumanEntry.createWithDate(date: imported.date)
-            newEntry.journalText = imported.text
+            print("🔍 DEBUG: Parsing entry: \(imported.filename)")
+            print("🔍 DEBUG: Raw text length: \(imported.text.count)")
 
-            let preview = imported.text
+            let parsed = parseEntryContent(imported.text)
+
+            print("🔍 DEBUG: Parsed - Journal: \(parsed.journalText.count) chars")
+            print("🔍 DEBUG: Parsed - Notes: \(parsed.notes.count) chars")
+            print("🔍 DEBUG: Parsed - TODOs: \(parsed.todos.count) items")
+            print("🔍 DEBUG: Parsed - isEmpty: \(parsed.isEmpty)")
+
+            if parsed.isEmpty {
+                print("⏭️ Skipping empty entry: \(imported.filename)")
+                continue
+            }
+
+            var newEntry = HumanEntry.createWithDate(date: imported.date)
+            newEntry.journalText = parsed.journalText
+
+            let previewSource = !parsed.journalText.isEmpty ? parsed.journalText :
+                                !parsed.notes.isEmpty ? "Notes: \(parsed.notes)" :
+                                parsed.todos.map { $0.text }.joined(separator: ", ")
+            let preview = previewSource
                 .replacingOccurrences(of: "\n", with: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            newEntry.previewText = preview.isEmpty ? "" : (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
+            newEntry.previewText = preview.isEmpty ? "" :
+                (preview.count > 100 ? String(preview.prefix(100)) + "..." : preview)
 
             do {
                 try entryRepo.save(newEntry)
                 entries.append(newEntry)
+
+                if !parsed.notes.isEmpty {
+                    let stickyNote = StickyNote(
+                        id: UUID(),
+                        date: imported.date,
+                        content: parsed.notes,
+                        createdAt: Date(),
+                        updatedAt: Date()
+                    )
+                    try stickyRepo.save(stickyNote)
+                }
+
+                for parsedTodo in parsed.todos {
+                    let todo = TODOItem(
+                        id: UUID(),
+                        date: imported.date,
+                        text: parsedTodo.text,
+                        completed: parsedTodo.completed,
+                        createdAt: Date(),
+                        dueTime: nil
+                    )
+                    try todoRepo.save(todo)
+                }
             } catch {
                 print("⚠️ Failed to save imported entry \(imported.filename): \(error)")
             }
