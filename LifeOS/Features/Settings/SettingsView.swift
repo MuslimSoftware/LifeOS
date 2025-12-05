@@ -630,11 +630,11 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if vm.isResetting || vm.isImporting {
+            if vm.isResetting || vm.isImporting || vm.isExporting {
                 HStack(spacing: 12) {
                     ProgressView()
                         .scaleEffect(0.8)
-                    Text(vm.isResetting ? "Resetting database..." : "Importing backup...")
+                    Text(vm.isResetting ? "Resetting database..." : vm.isImporting ? "Importing backup..." : "Exporting backup...")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(theme.primaryText)
                     Spacer()
@@ -666,6 +666,27 @@ struct SettingsView: View {
                 .cornerRadius(8)
             }
 
+            if let result = vm.lastExportResult {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Export complete")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.primaryText)
+
+                    Text("Exported \(result.filesExported) file(s)")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.secondaryText)
+
+                    if let range = result.dateRange {
+                        Text("Date range: \(range.start.formatted(date: .abbreviated, time: .omitted)) - \(range.end.formatted(date: .abbreviated, time: .omitted))")
+                            .font(.system(size: 11))
+                            .foregroundColor(theme.tertiaryText)
+                    }
+                }
+                .padding(12)
+                .background(theme.hoveredBackground)
+                .cornerRadius(8)
+            }
+
             if let error = vm.errorMessage {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -689,9 +710,9 @@ struct SettingsView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(vm.isResetting || vm.isImporting ? theme.dividerColor : theme.destructive)
+                .background(vm.isResetting || vm.isImporting || vm.isExporting ? theme.dividerColor : theme.destructive)
                 .cornerRadius(6)
-                .disabled(vm.isResetting || vm.isImporting)
+                .disabled(vm.isResetting || vm.isImporting || vm.isExporting)
 
                 Button("Import Backup (.zip, folder, or .md)") {
                     showBackupImporter = true
@@ -701,9 +722,21 @@ struct SettingsView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(vm.isResetting || vm.isImporting ? theme.dividerColor : theme.accentColor)
+                .background(vm.isResetting || vm.isImporting || vm.isExporting ? theme.dividerColor : theme.accentColor)
                 .cornerRadius(6)
-                .disabled(vm.isResetting || vm.isImporting)
+                .disabled(vm.isResetting || vm.isImporting || vm.isExporting)
+
+                Button("Export Backup (.zip)") {
+                    dataViewModel.exportBackup()
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(vm.isResetting || vm.isImporting || vm.isExporting ? theme.dividerColor : theme.accentColor)
+                .cornerRadius(6)
+                .disabled(vm.isResetting || vm.isImporting || vm.isExporting)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -716,7 +749,10 @@ struct SettingsView: View {
                 Text("• Import automatically resets first, then loads markdown files with frontmatter (date/year) and TODO lists.")
                     .font(.system(size: 11))
                     .foregroundColor(theme.secondaryText)
-                Text("• After importing, run “Process All Entries” in Embeddings to rebuild search.")
+                Text("• Export creates a ZIP of markdown files organized by day with your journal entries, TODOs, and sticky notes.")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.secondaryText)
+                Text("• After importing, run \"Process All Entries\" in Embeddings to rebuild search.")
                     .font(.system(size: 11))
                     .foregroundColor(theme.secondaryText)
             }

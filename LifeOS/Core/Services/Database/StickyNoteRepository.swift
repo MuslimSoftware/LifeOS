@@ -36,6 +36,13 @@ class StickyNoteRepository {
         }
     }
 
+    func getAllStickyNotes() throws -> [StickyNote] {
+        try dbService.getQueue().read { db in
+            try StickyNote
+                .order(Column("date").desc)
+                .fetchAll(db)
+        }
+    }
 
     func delete(id: UUID) throws {
         try dbService.getQueue().write { db in

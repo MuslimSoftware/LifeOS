@@ -5,18 +5,23 @@ import Observation
 class DataManagementViewModel {
     var isResetting = false
     var isImporting = false
+    var isExporting = false
     var lastImportResult: BackupImportResult?
+    var lastExportResult: BackupExportResult?
     var errorMessage: String?
 
     private let dbService: DatabaseService
     private let backupImportService: BackupImportService
+    private let backupExportService: BackupExportService
 
     init(
         dbService: DatabaseService = .shared,
-        backupImportService: BackupImportService = BackupImportService()
+        backupImportService: BackupImportService = BackupImportService(),
+        backupExportService: BackupExportService = BackupExportService()
     ) {
         self.dbService = dbService
         self.backupImportService = backupImportService
+        self.backupExportService = backupExportService
     }
 
     func resetDatabase() {
@@ -56,10 +61,34 @@ class DataManagementViewModel {
                     self.errorMessage = error.localizedDescription
                     self.isImporting = false
                     if case LifeOSDatabaseError.resetFailed = error {
-                        // Reset didn't happen, so skip broadcasting the notification
                     } else {
                         NotificationCenter.default.post(name: .databaseDidReset, object: nil)
                     }
+                }
+            }
+        }
+    }
+
+    func exportBackup() {
+        errorMessage = nil
+        lastExportResult = nil
+        isExporting = true
+
+        Task {
+            do {
+                let result = try await backupExportService.exportBackup()
+                await MainActor.run {
+                    self.lastExportResult = result
+                    self.isExporting = false
+                }
+            } catch BackupExportError.userCancelled {
+                await MainActor.run {
+                    self.isExporting = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                    self.isExporting = false
                 }
             }
         }
